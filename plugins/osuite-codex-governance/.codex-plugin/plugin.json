@@ -1,0 +1,34 @@
+{
+  "name": "osuite-codex-governance",
+  "version": "1.1.0",
+  "description": "Codex plugin that bundles OSuite hooks, MCP governance tools, and approval-aware behavior defaults.",
+  "author": {
+    "name": "Ond Holdings Inc.",
+    "email": "support@osuite.ai",
+    "url": "https://docs.osuite.ai"
+  },
+  "homepage": "https://docs.osuite.ai/docs/api-sdk/codex-plugin",
+  "repository": "https://github.com/OndCo/osuite-sdk",
+  "license": "MIT",
+  "keywords": ["osuite", "codex", "governance", "approvals", "runtime"],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "OSuite Codex Governance",
+    "shortDescription": "Bundle hooks, MCP, and approval-safe defaults into Codex.",
+    "longDescription": "Primary Codex rollout package for large teams. Ships strict-enough defaults, runtime sessions, replay, proof, and a bundled behavior layer so consequential actions stay buyer-auditable.",
+    "developerName": "OSuite",
+    "category": "Productivity",
+    "capabilities": ["Hooks", "MCP", "Approvals", "Replay", "Proof"],
+    "websiteURL": "https://docs.osuite.ai/docs/api-sdk/codex-plugin",
+    "privacyPolicyURL": "https://osuite.ai/privacy",
+    "termsOfServiceURL": "https://osuite.ai/terms",
+    "defaultPrompt": [
+      "Review this repo and use OSuite before risky actions.",
+      "Prepare a governed release check and wait for approval if needed.",
+      "Inspect infra changes and close every consequential action in OSuite."
+    ],
+    "brandColor": "#0B5FFF"
+  }
+}

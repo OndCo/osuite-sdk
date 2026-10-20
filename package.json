@@ -1,0 +1,20 @@
+{
+  "name": "osuite-sdk-source",
+  "version": "2.10.1",
+  "private": true,
+  "type": "module",
+  "description": "Standalone OSuite SDK and Hook source verification",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "test:compat": "node --test tests/compat.test.mjs",
+    "verify:source": "node scripts/verify-source.mjs",
+    "build:plugin": "node plugins/osuite-codex-governance/hooks/build-node-runtime.mjs",
+    "pack:sdk": "node scripts/pack-sdk.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "vitest": "4.1.11"
+  },
+  "engines": { "node": ">=20.19.0" }
+}

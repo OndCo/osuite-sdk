@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "osuite_runtime_governance": {
+      "command": "node",
+      "args": [
+        "./server/osuite_runtime_mcp.mjs"
+      ],
+      "env": {
+        "OSUITE_RUNTIME_ADAPTER_ID": "codex_plugin",
+        "OSUITE_RUNTIME_FAMILY": "tool_hook_runtime",
+        "OSUITE_ADAPTER_MODE": "hook",
+        "OSUITE_INSTALL_CHANNEL": "plugin",
+        "OSUITE_SETTINGS_SCOPE": "managed",
+        "OSUITE_HOOK_MODE": "enforce",
+        "OSUITE_GUARD_FAILURE_MODE": "block",
+        "OSUITE_SIGNATURE_MODE": "required"
+      }
+    }
+  }
+}

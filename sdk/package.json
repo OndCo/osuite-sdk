@@ -1,0 +1,63 @@
+{
+  "name": "osuite",
+  "version": "2.10.1",
+  "description": "OSuite governed action SDK for AI agents. Approve, replay, prove, and verify runtime decisions.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./index.cjs",
+  "module": "./osuite.js",
+  "bin": {
+    "osuite": "cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./osuite.js",
+      "require": "./index.cjs"
+    },
+    "./legacy": {
+      "import": "./legacy/osuite-v1.js",
+      "require": "./legacy/index-v1.cjs"
+    }
+  },
+  "files": [
+    "cli.js",
+    "credentials.js",
+    "activationMetrics.js",
+    "tryFlow.js",
+    "tryContract.js",
+    "runtime/",
+    "projectHooks.js",
+    "reviewSurface.js",
+    "osuite.js",
+    "index.cjs",
+    "LICENSE",
+    "README.md",
+    "legacy/"
+  ],
+  "keywords": [
+    "ai-agent",
+    "decision-infrastructure",
+    "agent-governance",
+    "guardrails",
+    "osuite"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OndCo/osuite-sdk.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://ond.cc",
+  "bugs": {
+    "url": "https://github.com/OndCo/osuite-sdk/issues"
+  },
+  "author": "OSuite",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "scripts": {},
+  "sideEffects": false
+}

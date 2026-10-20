@@ -1,0 +1,580 @@
+{
+  "version": 1,
+  "scope": "Explicit SDK, Hook and standalone test sources only",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "source": "scripts/sdk-release/template/.github/workflows/ci.yml",
+      "size": 1158,
+      "mode": 420,
+      "sha256": "93d99d2cd2d0ae7ead17a76b08bec03a61a4ef82fbbbfa562d14fe13e6be335a"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "source": "scripts/sdk-release/template/.github/workflows/publish.yml",
+      "size": 1470,
+      "mode": 420,
+      "sha256": "6103c041b88556b6af715c663d2afe53c5870e3af28b0d33205b3f65dc7412dc"
+    },
+    {
+      "path": ".gitignore",
+      "source": "scripts/sdk-release/template/.gitignore",
+      "size": 79,
+      "mode": 420,
+      "sha256": "080b01711b561727c3db53e1ff9fb52cb8d63c4f090c33bd9457b1a8cc3f8822"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "source": "scripts/sdk-release/template/CONTRIBUTING.md",
+      "size": 986,
+      "mode": 420,
+      "sha256": "34cc21df69a2f62daa8906fc4b57f78b604f38ed58fefa4118b0538ac0fe3667"
+    },
+    {
+      "path": "Formula/osuite.rb",
+      "source": "scripts/sdk-release/template/Formula/osuite.rb",
+      "size": 559,
+      "mode": 420,
+      "sha256": "9909af227bc33e5b9e1900fc0afddbfa920139da5502635c05a85b2464320447"
+    },
+    {
+      "path": "LICENSE",
+      "source": "sdk/LICENSE",
+      "size": 1071,
+      "mode": 420,
+      "sha256": "21ab7fb6a83e510c81c5f3c35c14ecd293559da0df348559489cce0e45be9c25"
+    },
+    {
+      "path": "README.md",
+      "source": "scripts/sdk-release/template/README.md",
+      "size": 2611,
+      "mode": 420,
+      "sha256": "c7c54bef3bbe438510635f59579b6f7ecb57d5fbc02e3e4c0973950298adbff4"
+    },
+    {
+      "path": "RELEASING.md",
+      "source": "scripts/sdk-release/template/RELEASING.md",
+      "size": 3049,
+      "mode": 420,
+      "sha256": "04a8f2b1950cb0bdc96ca705d3a308cbf21b639c8b9554d272aec36b93ce18d3"
+    },
+    {
+      "path": "SECURITY.md",
+      "source": "scripts/sdk-release/template/SECURITY.md",
+      "size": 821,
+      "mode": 420,
+      "sha256": "ee88995906e4628aaf66519ae487979c5baf05cadd3e37faeeeda6136e3e7d9f"
+    },
+    {
+      "path": "__tests__/unit/onboarding-try.test.js",
+      "source": "__tests__/unit/onboarding-try.test.js",
+      "size": 8195,
+      "mode": 420,
+      "sha256": "79ec90affd87e9d75909b1283be009772af8cc59809eb7a0a6b74e7b488cd631"
+    },
+    {
+      "path": "__tests__/unit/runtime-native-host-wire.test.js",
+      "source": "__tests__/unit/runtime-native-host-wire.test.js",
+      "size": 14806,
+      "mode": 420,
+      "sha256": "2186b31c6453b0cd1cdf0a7030c736f7d3ceda7a9b2c499033153171982b5897"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-admission.test.js",
+      "source": "__tests__/unit/runtime-node-admission.test.js",
+      "size": 8933,
+      "mode": 420,
+      "sha256": "1b973fc4dfcbff46cb7eb16254d914066f1b0d789ce96b7f720262ccf70ec296"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-context.test.js",
+      "source": "__tests__/unit/runtime-node-context.test.js",
+      "size": 9253,
+      "mode": 420,
+      "sha256": "50caf691a5793d1f85926a02869ed9710e880c9ca87e8c5cb701439cf376454a"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-cursor-install.test.js",
+      "source": "__tests__/unit/runtime-node-cursor-install.test.js",
+      "size": 9102,
+      "mode": 420,
+      "sha256": "32c204015d592e9dee424094ceb2a7bf96e8c6a9033d8c93ab23f9de3746afa3"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-cursor.test.js",
+      "source": "__tests__/unit/runtime-node-cursor.test.js",
+      "size": 11275,
+      "mode": 420,
+      "sha256": "e5f7c6606ce890aea062e97c6cc5fa6d1fcbdbcc169130c8133467d2aab1157f"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-git.test.js",
+      "source": "__tests__/unit/runtime-node-git.test.js",
+      "size": 3981,
+      "mode": 420,
+      "sha256": "f6957783d4525feaf834ad2f41e37ddb1cceca7792908fb78d6bacbb391f3b41"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-hook.test.js",
+      "source": "__tests__/unit/runtime-node-hook.test.js",
+      "size": 9998,
+      "mode": 420,
+      "sha256": "8ac4e691cdfcd5db8f4da7646e9783cb3b072c247c523f9bc0efbf8ab46c8cbe"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-install.test.js",
+      "source": "__tests__/unit/runtime-node-install.test.js",
+      "size": 8186,
+      "mode": 420,
+      "sha256": "070d1c610cd0c680874ad45e12d59a8ab60aff961537082759c82c1e0b432b33"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-mcp.test.js",
+      "source": "__tests__/unit/runtime-node-mcp.test.js",
+      "size": 10113,
+      "mode": 420,
+      "sha256": "71c73d613f1a37564758457113612090c000c44e7d7b1b677941367760fd39d1"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-outcome.test.js",
+      "source": "__tests__/unit/runtime-node-outcome.test.js",
+      "size": 9431,
+      "mode": 420,
+      "sha256": "d0d97346652518f202eeab1a8d39b491bbda26caea88b5330f9d314af1ca308a"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-plugin.test.js",
+      "source": "__tests__/unit/runtime-node-plugin.test.js",
+      "size": 5703,
+      "mode": 420,
+      "sha256": "f8a0071767c1664f1d05b1497a6004afb33c38c5ed7e9cc90a557bc7bcfa7b47"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-posture.test.js",
+      "source": "__tests__/unit/runtime-node-posture.test.js",
+      "size": 7850,
+      "mode": 420,
+      "sha256": "6805dc0aca676ce3b907326a7a25f644d89be7c30c4c75d7f115740be8cac588"
+    },
+    {
+      "path": "__tests__/unit/runtime-node-transport.test.js",
+      "source": "__tests__/unit/runtime-node-transport.test.js",
+      "size": 9145,
+      "mode": 420,
+      "sha256": "0a7ba67827eece3a7ddf39a546fe67589b513b92736bfdeeb41e98e32b8c1f28"
+    },
+    {
+      "path": "__tests__/unit/sdk-activation-measurement.test.js",
+      "source": "__tests__/unit/sdk-activation-measurement.test.js",
+      "size": 9150,
+      "mode": 420,
+      "sha256": "bd310c83df443e25c124efb67f7925935e8c5f85935186c9bdfeebf484156487"
+    },
+    {
+      "path": "__tests__/unit/sdk-credential-helper.test.js",
+      "source": "__tests__/unit/sdk-credential-helper.test.js",
+      "size": 4897,
+      "mode": 420,
+      "sha256": "35171cde7394d84c50e4a1afb2bfb9f4997cc9f9ad18702ce90ee641785308cf"
+    },
+    {
+      "path": "__tests__/unit/sdk-credential-storage.test.js",
+      "source": "__tests__/unit/sdk-credential-storage.test.js",
+      "size": 8221,
+      "mode": 420,
+      "sha256": "065e250454b31ad1e9b17c00bada528bf47f33716401483ac79bc4f61f3e6655"
+    },
+    {
+      "path": "__tests__/unit/sdk-cursor-cli.test.js",
+      "source": "__tests__/unit/sdk-cursor-cli.test.js",
+      "size": 2309,
+      "mode": 420,
+      "sha256": "05028b0e4e050089a29bae2ca9cb8f755aede28e5fe8d6b22e716bec9de0e829"
+    },
+    {
+      "path": "__tests__/unit/sdk-device-connect-recovery.test.js",
+      "source": "__tests__/unit/sdk-device-connect-recovery.test.js",
+      "size": 11775,
+      "mode": 420,
+      "sha256": "758b1840f531d968da9817d3004ce472ee535fec2fbd3cf0381ede725e939905"
+    },
+    {
+      "path": "__tests__/unit/sdk-package-contract.test.js",
+      "source": "__tests__/unit/sdk-package-contract.test.js",
+      "size": 1751,
+      "mode": 420,
+      "sha256": "a25a79f8bc8a2ff054db9989d9ba6090318a56e0f4e4aedf1e8874eef9372b20"
+    },
+    {
+      "path": "package-lock.json",
+      "source": "scripts/sdk-release/template/package-lock.json",
+      "size": 53657,
+      "mode": 420,
+      "sha256": "e422571ca2c8697630d2ceea8569f80eb21fcb5fc42ea34cafe4a6c1a2b045d1"
+    },
+    {
+      "path": "package.json",
+      "source": "scripts/sdk-release/template/package.json",
+      "size": 591,
+      "mode": 420,
+      "sha256": "44e4b8f3674bcfb8dcaa770e175756a8fbc63673bd3195e779270be6a23b293e"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
+      "source": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
+      "size": 1548,
+      "mode": 420,
+      "sha256": "da36afc43410fe491673ea893a0eff5ee06dc89f0cac983745880133bb4e15e6"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/.mcp.json",
+      "source": "plugins/osuite-codex-governance/.mcp.json",
+      "size": 545,
+      "mode": 420,
+      "sha256": "db58ceb2491af4a5775677abd46045641082e04415e24b9c1c83377d1108963b"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/README.md",
+      "source": "plugins/osuite-codex-governance/README.md",
+      "size": 4823,
+      "mode": 420,
+      "sha256": "12abe7b50a7a9a036ad9ffaa67beac37213e1d30e292e9d7ef20f9b1b72942f4"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/config.toml.partial",
+      "source": "plugins/osuite-codex-governance/config.toml.partial",
+      "size": 220,
+      "mode": 420,
+      "sha256": "de3e8ad63e94244413cc5977544f26f67240a92505a4fc8bf3e8ed32e390cd17"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks.json",
+      "source": "plugins/osuite-codex-governance/hooks.json",
+      "size": 923,
+      "mode": 420,
+      "sha256": "df9355c4cbd97d4b80f19219515696c599a829d91a8390f9d110e02c8adfe802"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks/build-node-runtime.mjs",
+      "source": "plugins/osuite-codex-governance/hooks/build-node-runtime.mjs",
+      "size": 1025,
+      "mode": 420,
+      "sha256": "a88a2f9172c9ef2b0fb1802392229e730c52c62511756f3b281701df46075f15"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks/osuite_posttool.mjs",
+      "source": "plugins/osuite-codex-governance/hooks/osuite_posttool.mjs",
+      "size": 258,
+      "mode": 420,
+      "sha256": "93726608469ae7ea62ddb0ee52cbe93a50c52bc03efd975b12ea3450fabea454"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks/osuite_pretool.mjs",
+      "source": "plugins/osuite-codex-governance/hooks/osuite_pretool.mjs",
+      "size": 257,
+      "mode": 420,
+      "sha256": "2168ea379dbd81c27e172052b8a3e50535dcc62eeffed020fe69d2fd4eebffb9"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
+      "source": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
+      "size": 88139,
+      "mode": 420,
+      "sha256": "e895df9f253411e3ffaf46659fce68b536cdced7d749e83ef8682c844034303d"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/hooks/osuite_session.mjs",
+      "source": "plugins/osuite-codex-governance/hooks/osuite_session.mjs",
+      "size": 259,
+      "mode": 420,
+      "sha256": "dfa7e8ed778a9fbf3834b67f44b33528252bab2b9af87a99e5e7bc81f7667a38"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/server/osuite_runtime_mcp.mjs",
+      "source": "plugins/osuite-codex-governance/server/osuite_runtime_mcp.mjs",
+      "size": 241,
+      "mode": 420,
+      "sha256": "a20ae8b6195851ca78a3cde1330755bb5becb69112cf87038ba1cff3ba16661f"
+    },
+    {
+      "path": "plugins/osuite-codex-governance/skills/osuite-governed-runtime/SKILL.md",
+      "source": "plugins/osuite-codex-governance/skills/osuite-governed-runtime/SKILL.md",
+      "size": 3013,
+      "mode": 420,
+      "sha256": "84a23dd5f0c62e39ec309560cb886aeb609279136012f00071618abd23d1cab9"
+    },
+    {
+      "path": "runtime-adapters/claude-code/osuite_posttool.mjs",
+      "source": "runtime-adapters/claude-code/osuite_posttool.mjs",
+      "size": 237,
+      "mode": 420,
+      "sha256": "3634d4f87d92e640a8b9de95de84c111047ce6a0dee96d3df31274297ddbf117"
+    },
+    {
+      "path": "runtime-adapters/claude-code/osuite_pretool.mjs",
+      "source": "runtime-adapters/claude-code/osuite_pretool.mjs",
+      "size": 236,
+      "mode": 420,
+      "sha256": "ab63c322c1303deab94902ec6af7b9d1ff335de097a4dde4dc2b97fac91b2a71"
+    },
+    {
+      "path": "runtime-adapters/claude-code/osuite_session.mjs",
+      "source": "runtime-adapters/claude-code/osuite_session.mjs",
+      "size": 238,
+      "mode": 420,
+      "sha256": "41de02aefaa2aa8283b31d54943118d7d625e88bb4f1b570fdcf35b68f726e82"
+    },
+    {
+      "path": "runtime-adapters/claude-code/osuite_stop.mjs",
+      "source": "runtime-adapters/claude-code/osuite_stop.mjs",
+      "size": 230,
+      "mode": 420,
+      "sha256": "128e813d8d57a359bfea679b775579383a42bfbe56900408b9f557b4b2652073"
+    },
+    {
+      "path": "runtime-adapters/cursor/osuite_posttool.mjs",
+      "source": "runtime-adapters/cursor/osuite_posttool.mjs",
+      "size": 235,
+      "mode": 420,
+      "sha256": "316e475e50d8671e82a2ee41d8986df80e30285c8f904107f7c3b176bf41e932"
+    },
+    {
+      "path": "runtime-adapters/cursor/osuite_pretool.mjs",
+      "source": "runtime-adapters/cursor/osuite_pretool.mjs",
+      "size": 234,
+      "mode": 420,
+      "sha256": "11bb571f17df4a8ec6799fb7da7e74a96e88ad1e49cda732dba11e646ed10650"
+    },
+    {
+      "path": "runtime-adapters/cursor/osuite_session.mjs",
+      "source": "runtime-adapters/cursor/osuite_session.mjs",
+      "size": 236,
+      "mode": 420,
+      "sha256": "8aa0f55228ef11c92f0646e8559a46cf261f35e810e85db653a68b702c1c719e"
+    },
+    {
+      "path": "runtime-adapters/cursor/osuite_stop.mjs",
+      "source": "runtime-adapters/cursor/osuite_stop.mjs",
+      "size": 228,
+      "mode": 420,
+      "sha256": "f63d397fb090f52d383de20fe7a61170ddc4f1c5f9fbca83a6ac036d23679a7d"
+    },
+    {
+      "path": "scripts/pack-sdk.mjs",
+      "source": "scripts/sdk-release/template/scripts/pack-sdk.mjs",
+      "size": 617,
+      "mode": 420,
+      "sha256": "66cd49cfde0cd3d4dd7a28004f3b595ae6d9e82d141e5f356320638e75a28b53"
+    },
+    {
+      "path": "scripts/verify-source.mjs",
+      "source": "scripts/sdk-release/template/scripts/verify-source.mjs",
+      "size": 2519,
+      "mode": 420,
+      "sha256": "b42d9971a5d228f290fca4edf2273e5a61ab52635a30ea8247b2ec0314425546"
+    },
+    {
+      "path": "sdk/LICENSE",
+      "source": "sdk/LICENSE",
+      "size": 1071,
+      "mode": 420,
+      "sha256": "21ab7fb6a83e510c81c5f3c35c14ecd293559da0df348559489cce0e45be9c25"
+    },
+    {
+      "path": "sdk/README.md",
+      "source": "sdk/README.md",
+      "size": 27793,
+      "mode": 420,
+      "sha256": "7df2a76611837b1709694efa0b198db3c89cbc659ab4d6a33bc441b6a81cc457"
+    },
+    {
+      "path": "sdk/activationMetrics.js",
+      "source": "sdk/activationMetrics.js",
+      "size": 6412,
+      "mode": 420,
+      "sha256": "ac76e500fd193a14889da9095b5c8d9f041183ed1766827f70f0abb366465b0d"
+    },
+    {
+      "path": "sdk/cli.js",
+      "source": "sdk/cli.js",
+      "size": 68818,
+      "mode": 493,
+      "sha256": "1aa7ec9dd81e3998e1b6a996999a04245a715c69a08869317fd59a1e481cc60e"
+    },
+    {
+      "path": "sdk/credentials.js",
+      "source": "sdk/credentials.js",
+      "size": 10736,
+      "mode": 420,
+      "sha256": "a771aa4cd69922ea35dbc7c5f464f582368fb5e57b94649bbc638d5f5b8ebcc8"
+    },
+    {
+      "path": "sdk/index.cjs",
+      "source": "sdk/index.cjs",
+      "size": 1646,
+      "mode": 420,
+      "sha256": "0003335dd5ddcd5890538b51a2711b70f45e3e57b708294d48d551eae7179875"
+    },
+    {
+      "path": "sdk/legacy/index-v1.cjs",
+      "source": "sdk/legacy/index-v1.cjs",
+      "size": 57,
+      "mode": 420,
+      "sha256": "6e6f950df60cf07ff7b9df7024ae5eba1ca83d8fa5945229d275a1855b8fa558"
+    },
+    {
+      "path": "sdk/legacy/osuite-v1-runtime.js",
+      "source": "sdk/legacy/osuite-v1-runtime.js",
+      "size": 114,
+      "mode": 420,
+      "sha256": "271f6e8f32bf080b23e2a5d54d72c4be24d9518c41fef960ee32ecb84539bd32"
+    },
+    {
+      "path": "sdk/legacy/osuite-v1.js",
+      "source": "sdk/legacy/osuite-v1.js",
+      "size": 113,
+      "mode": 420,
+      "sha256": "e3da84a07564db9b3281e893b8bf8226a43a567e5ad77a7d93e7d55b2230d394"
+    },
+    {
+      "path": "sdk/osuite.js",
+      "source": "sdk/osuite.js",
+      "size": 17173,
+      "mode": 420,
+      "sha256": "27be6db17123921736988d87711e1b3cd0c7140dede9b47f427ee2cb5d12d77d"
+    },
+    {
+      "path": "sdk/package.json",
+      "source": "sdk/package.json",
+      "size": 1292,
+      "mode": 420,
+      "sha256": "2589c1ae3a6245ddc4252cbba30935a6fd896e93d3bb4ad847eaca11d312acb5"
+    },
+    {
+      "path": "sdk/projectHooks.js",
+      "source": "sdk/projectHooks.js",
+      "size": 47163,
+      "mode": 420,
+      "sha256": "cd1fe57b02f91bcb9b2b929cb7d3931a87f366788a1846510b6d56a093356b44"
+    },
+    {
+      "path": "sdk/reviewSurface.js",
+      "source": "sdk/reviewSurface.js",
+      "size": 6098,
+      "mode": 420,
+      "sha256": "29d6f8fe669e796072f961a4430f3d03ef36ef9ee278033a7ab768f610c0307a"
+    },
+    {
+      "path": "sdk/runtime/admission.mjs",
+      "source": "sdk/runtime/admission.mjs",
+      "size": 9588,
+      "mode": 420,
+      "sha256": "4aec6867d2cbe626474e333f5977dad88e7709789fcbebb5117d0bb9b7f26d97"
+    },
+    {
+      "path": "sdk/runtime/config.mjs",
+      "source": "sdk/runtime/config.mjs",
+      "size": 3332,
+      "mode": 420,
+      "sha256": "5c0b6e0987fee117b3195f4fda768944445ffccd55c16a73ff2cae05b5b98b7f"
+    },
+    {
+      "path": "sdk/runtime/context.mjs",
+      "source": "sdk/runtime/context.mjs",
+      "size": 10142,
+      "mode": 420,
+      "sha256": "5ac58809ce04a936475b5523f2a0b175416e6f324ab6a31bdfe2fb5297237e7d"
+    },
+    {
+      "path": "sdk/runtime/cursor.mjs",
+      "source": "sdk/runtime/cursor.mjs",
+      "size": 5021,
+      "mode": 420,
+      "sha256": "a970c7301a297f98aae8d5f2782d9d2880e8888c513125a3033ff253956a1769"
+    },
+    {
+      "path": "sdk/runtime/git.mjs",
+      "source": "sdk/runtime/git.mjs",
+      "size": 2890,
+      "mode": 420,
+      "sha256": "b88465cf085644deb692763a12a378097dbec0d7b3fe3a34bb5260e48b1d4872"
+    },
+    {
+      "path": "sdk/runtime/hook.mjs",
+      "source": "sdk/runtime/hook.mjs",
+      "size": 13619,
+      "mode": 420,
+      "sha256": "1faf193b556f886578726b03db66b74145f93d7c82f10b8123295748db1bd736"
+    },
+    {
+      "path": "sdk/runtime/mcp.mjs",
+      "source": "sdk/runtime/mcp.mjs",
+      "size": 17262,
+      "mode": 420,
+      "sha256": "897509ab27c5a85fb76bba80b4752d4426df5bdef4982f82a498d01d59018126"
+    },
+    {
+      "path": "sdk/runtime/outcome.mjs",
+      "source": "sdk/runtime/outcome.mjs",
+      "size": 6248,
+      "mode": 420,
+      "sha256": "08a0cead5b138285da1cee306e792c6169b8e99fc6b518a1ccea5002d43ba782"
+    },
+    {
+      "path": "sdk/runtime/posture.mjs",
+      "source": "sdk/runtime/posture.mjs",
+      "size": 5980,
+      "mode": 420,
+      "sha256": "58c8e4c05bdc487d18a7805b146e4d95179d9bd864ddf7f6ca981046b8d56e60"
+    },
+    {
+      "path": "sdk/runtime/protocol.mjs",
+      "source": "sdk/runtime/protocol.mjs",
+      "size": 4715,
+      "mode": 420,
+      "sha256": "62e959304dc1bccde4425f0bb0148821e509ea6c1076152aeda567d1ce8cdc83"
+    },
+    {
+      "path": "sdk/runtime/shell.mjs",
+      "source": "sdk/runtime/shell.mjs",
+      "size": 12570,
+      "mode": 420,
+      "sha256": "0f2ac5de02877a8b3a75e32224a84988ccf6020e0bf0ff0833b2306dbb32cd9b"
+    },
+    {
+      "path": "sdk/runtime/state.mjs",
+      "source": "sdk/runtime/state.mjs",
+      "size": 3290,
+      "mode": 420,
+      "sha256": "ae45948f30259eb7c21c6fdc7a51184bcb1f2c22d76a11ae0654702f65962471"
+    },
+    {
+      "path": "sdk/tryContract.js",
+      "source": "sdk/tryContract.js",
+      "size": 2749,
+      "mode": 420,
+      "sha256": "7c827561e47837b76edad7ccef27d9996306c9e615d904028189cf21960edc4d"
+    },
+    {
+      "path": "sdk/tryFlow.js",
+      "source": "sdk/tryFlow.js",
+      "size": 5558,
+      "mode": 420,
+      "sha256": "6813ce0852755798a6634ebc287a9d93d9fe66fd2ef5a1b4c43d078fe0891def"
+    },
+    {
+      "path": "tests/compat.test.mjs",
+      "source": "scripts/sdk-release/template/tests/compat.test.mjs",
+      "size": 5805,
+      "mode": 420,
+      "sha256": "efe780924ddad6b6691977549956be9b79cbca4c0b8d403fd7d8ef956f67a115"
+    },
+    {
+      "path": "vitest.config.mjs",
+      "source": "scripts/sdk-release/template/vitest.config.mjs",
+      "size": 209,
+      "mode": 420,
+      "sha256": "c1f38d011e366d176a6a8f946de3b82da3c2dc6d3f40aa549ab350c96aaa4772"
+    }
+  ]
+}
