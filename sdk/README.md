@@ -1,4 +1,4 @@
-# OSuite SDK (v2.10.1)
+# OSuite SDK (v2.10.2 Release Candidate)
 
 **Governed action SDK for AI agents.**
 
@@ -13,7 +13,7 @@ npm install osuite
 
 ### Connect And Verify
 
-For the checked-out 2.10.1 source, run from the project you want to connect:
+For the checked-out 2.10.2 candidate source, run from the project you want to connect:
 
 ```bash
 node /absolute/path/to/osuite-sdk/sdk/cli.js connect
@@ -21,10 +21,11 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-After the owner publishes 2.10.1 to npm, the equivalent pinned command is
-`npx osuite@2.10.1 connect`. A source release does not mean that npm's `latest`
+After the owner publishes 2.10.2 to npm, the equivalent pinned command is
+`npx osuite@2.10.2 connect`. A source release does not mean that npm's `latest`
 already contains it. Check `npm view osuite version` before relying on the new
-credential-recovery or Node-hook behavior.
+installation-identity or acknowledged-recovery behavior. npm's latest was 2.10.1
+when checked on 2026-10-22; this checkout is not a registry publication.
 
 The alternative installer follows npm's published `latest`:
 
@@ -517,6 +518,49 @@ For local CLI agents, `osuite connect auto` opens the browser handoff in your br
 - `review` renders a PCAA/CAVA/Decision V2 review card with action understanding, evidence confidence, control posture, and score dimensions when present.
 
 Project installation refuses settings or hook paths whose symlinks resolve outside the project's real root, including linked parent directories. Credential storage also refuses any symlink, hardlink or Git-tracked destination; successful POSIX writes use mode `0600` and exact ignore entries. A browser approval alone does not retire the previous runtime credential: the versioned connection protocol waits for durable local storage and acknowledgement. If interrupted, resume the same `osuite connect` command rather than deleting its recovery journal. Manual API keys and other runtime connections are not replaced. Existing settings are merged; `disableAllHooks: true` and explicit Codex hook-disable flags stay disabled even with `--force`. Disabled setup is reported as not ready, not as a successful connection.
+
+Fresh project/runtime installations now keep two separate random identifiers in
+an ignored, protected `.env.identity.json` beside the runtime's credential file:
+an installation identifier and the default agent identifier. Neither identifies
+a person or attests hardware. Different project/runtime installations on the same
+computer remain different installations, not additional licensed developers.
+Do not copy identity/credential files between devices. Existing configured agent
+identifiers and interrupted connection journals are preserved.
+
+Replacing an existing connection requires its current credential, including when
+only one legacy connection has that name. An omitted, incorrect or revoked key
+cannot implicitly reclaim the identity. If a device/credential is lost, an
+authorized administrator retires that connection and approves a new unique
+identity; use an explicit new `--agent-id` if retaining the old project directory.
+Preserve historical records and signing keys instead of reassigning past actions
+to the replacement. A client-side installation ID is not permission to rotate.
+
+### SDK and MCP Credential Separation (2.10.2 Candidate)
+
+SDK connections use `.osuite/.env`; MCP connections use `.osuite/mcp/.env`.
+Their installation metadata and recovery journals live beside their respective
+credential files. Connecting one runtime does not borrow another runtime's key
+from a merged project configuration. If an interrupted journal conflicts with
+the current credential bundle, the CLI stops before storage or acknowledgement;
+inspect the current connection instead of deleting the journal to force a retry.
+
+For an older MCP installation stored at the SDK path, stop that local MCP client
+and run this explicit, local-only migration from its project directory:
+
+```sh
+osuite connect mcp --migrate-legacy
+```
+
+This moves the verified MCP bundle, including any identity and recovery state,
+without issuing a key, contacting Studio, or acknowledging an enrollment. It
+refuses ambiguous runtime ownership or an occupied destination. An interrupted
+move leaves a durable marker; inspect the files and rerun the same migration,
+rather than deleting its marker or copying credentials. Update the MCP launcher's
+credential-file reference to `.osuite/mcp/.env` before restarting it or creating an
+SDK connection. The command does not rewrite vendor launchers or enable hooks.
+
+This section describes the unpublished 2.10.2 candidate. Do not use a previous
+published CLI version to perform the new migration.
 
 `doctor` separates hook configuration, project enablement, credentials, connectivity, telemetry, and an enforced policy outcome. Observation-only mode, an unavailable guard (whether fail-open or fail-closed), or telemetry without a matching policy outcome does not pass the governance check. Hook warnings are printed even when the probe otherwise succeeds. The probe never executes its sample tool command and does not prove the host loaded the hooks: start or restart the runtime and verify its actual hook invocation separately.
 

@@ -9,6 +9,11 @@ import { OSuite, buildReviewSurface } from './osuite.js';
 import { runTryFlow } from './tryFlow.js';
 import { runDoctorWithMeasurement } from './activationMetrics.js';
 import {
+  credentialDigest, getInstallationIdentity, migrateMcpInstallation, parseInstallationIdentity,
+  readInstallationBundle, readInstallationIdentity, readMcpMigration,
+  MCP_ENV_PATH, MCP_MIGRATION_PATH, SDK_ENV_PATH,
+} from './installationIdentity.js';
+import {
   CREDENTIAL_PATHS, acquireCredentialLock, inspectCredentialFile,
   readCredentialFile, removeCredentialFile, writeCredentialFile,
 } from './credentials.js';
@@ -52,6 +57,7 @@ const GIT_OBSERVATION_RISKS = {
 const PUBLIC_FILE_HOST_HINTS = ['transfer.sh', 'file.io', 'tmpfiles.org', '0x0.st', 'ufile.io', 'gofile.io', 'wetransfer.com'];
 const SECURITY_CONTROL_WEAKENING_RE = /(\bspctl\b[\s\S]*(--master-disable|--global-disable|--disable)|\bcsrutil\b[\s\S]*\bdisable\b|Set-MpPreference[\s\S]*Disable(?:RealtimeMonitoring|BehaviorMonitoring|IOAVProtection)[\s\S]*(true|\$true|1)|netsh\s+advfirewall\s+set\s+allprofiles\s+state\s+off|\bsystemctl\b[\s\S]*\b(stop|disable|mask)\b[\s\S]*(auditd|falcon|crowdstrike|osquery|defender|mdatp|sentinel|carbonblack|firewalld|ufw)|\bufw\b[\s\S]*\bdisable\b)/i;
 const DEFAULT_BASE_URL = 'https://studio.osuite.ai';
+const CLI_CREDENTIAL_PATHS = [...CREDENTIAL_PATHS, MCP_ENV_PATH];
 const PROJECT_BOOTSTRAPS = {
   codex: {
     label: 'Codex hook runtime',
@@ -115,10 +121,8 @@ function write(value = '') {
   process.stdout.write(`${value}\n`);
 }
 
-function loadDotenvFile(relativePath) {
-  const absolute = path.join(process.cwd(), relativePath);
-  if (!fs.existsSync(absolute)) return;
-  const body = fs.readFileSync(absolute, 'utf8');
+function parseEnvBody(body = '') {
+  const env = Object.create(null);
   body.split(/\r?\n/).forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) return;
@@ -126,12 +130,23 @@ function loadDotenvFile(relativePath) {
     const key = rawKey.trim();
     let value = rawValue.join('=').trim().replace(/^['"]|['"]$/g, '');
     if (value.includes(' #')) value = value.slice(0, value.indexOf(' #')).trim();
-    if (key && !process.env[key]) process.env[key] = value;
+    if (key && !env[key]) env[key] = value;
   });
+  return env;
+}
+
+function loadDotenvFile(relativePath) {
+  const absolute = path.join(process.cwd(), relativePath);
+  if (!fs.existsSync(absolute)) return;
+  for (const [key, value] of Object.entries(parseEnvBody(fs.readFileSync(absolute, 'utf8')))) {
+    if (!process.env[key]) process.env[key] = value;
+  }
 }
 
 function loadProjectEnvironment() {
-  [...CREDENTIAL_PATHS, '.env'].forEach((relativePath) => {
+  // Enrollment selects one whole runtime bundle, never a merged global env.
+  if (process.argv[2] === 'connect') return;
+  [...CLI_CREDENTIAL_PATHS, '.env'].forEach((relativePath) => {
     if (process.argv[2] === 'doctor' && !inspectCredentialFile(process.cwd(), relativePath).safe) return;
     loadDotenvFile(relativePath);
   });
@@ -165,14 +180,15 @@ function envValue(name, fallback) {
   return process.env[name] || process.env[fallback] || '';
 }
 
-function readConfig() {
+function readConfig(env = process.env) {
+  const value = (name, fallback) => env[name] || env[fallback] || '';
   return {
-    baseUrl: envValue('OSUITE_BASE_URL', 'DASHCLAW_BASE_URL'),
-    apiKey: envValue('OSUITE_API_KEY', 'DASHCLAW_API_KEY'),
-    agentId: envValue('OSUITE_AGENT_ID', 'DASHCLAW_AGENT_ID') || 'osuite-cli',
-    agentKeyId: envValue('OSUITE_AGENT_KEY_ID', 'DASHCLAW_AGENT_KEY_ID') || null,
-    runtimeAdapterId: process.env.OSUITE_RUNTIME_ADAPTER_ID || '',
-    signatureMode: process.env.OSUITE_SIGNATURE_MODE || '',
+    baseUrl: value('OSUITE_BASE_URL', 'DASHCLAW_BASE_URL'),
+    apiKey: value('OSUITE_API_KEY', 'DASHCLAW_API_KEY'),
+    agentId: value('OSUITE_AGENT_ID', 'DASHCLAW_AGENT_ID') || 'osuite-cli',
+    agentKeyId: value('OSUITE_AGENT_KEY_ID', 'DASHCLAW_AGENT_KEY_ID') || null,
+    runtimeAdapterId: env.OSUITE_RUNTIME_ADAPTER_ID || '',
+    signatureMode: env.OSUITE_SIGNATURE_MODE || '',
   };
 }
 
@@ -227,14 +243,6 @@ function buildConnectHandoffUrl({ baseUrl, runtime, code }) {
   return url.toString();
 }
 
-function defaultAgentIdForRuntime(runtime) {
-  if (runtime === 'codex') return 'codex-runtime';
-  if (runtime === 'claude') return 'claude-code-runtime';
-  if (runtime === 'cursor') return 'cursor-runtime';
-  if (runtime === 'mcp') return 'mcp-runtime';
-  return 'sdk-runtime';
-}
-
 function sanitizeConfiguredAgentId(runtime, agentId) {
   const value = String(agentId || '').trim();
   if (!value) return '';
@@ -266,7 +274,61 @@ function envPathForRuntime(runtime) {
   if (runtime === 'codex') return '.codex/.env';
   if (runtime === 'claude') return '.claude/.env';
   if (runtime === 'cursor') return '.cursor/.env';
-  return '.osuite/.env';
+  return runtime === 'mcp' ? MCP_ENV_PATH : SDK_ENV_PATH;
+}
+
+function connectionConfig(runtime, liveEnv, { dryRun = false } = {}) {
+  if (liveEnv !== null) return readConfig(parseEnvBody(liveEnv));
+  const shell = readConfig(SHELL_ENV);
+  if (runtimeMatchesConfiguredAdapter(runtime, shell.runtimeAdapterId)) return shell;
+  const legacy = dryRun ? null : readCredentialFile(process.cwd(), '.env');
+  if (legacy !== null) {
+    const config = readConfig(parseEnvBody(legacy));
+    if (runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId)) return config;
+  }
+  return readConfig(!shell.apiKey && !shell.runtimeAdapterId ? { OSUITE_BASE_URL: shell.baseUrl } : {});
+}
+
+function parseConnectionJournal(raw) {
+  if (raw === null) return null;
+  try {
+    const journal = JSON.parse(raw);
+    if (journal && typeof journal === 'object' && !Array.isArray(journal)) return journal;
+  } catch { /* Report only metadata, never journal contents. */ }
+  throw new Error('The saved connection recovery journal is invalid; it was left unchanged.');
+}
+
+function assertRecoveryState(journal, { runtime, baseUrl, agentId, liveEnv, config, installation }) {
+  if (journal.protocol_version !== 2 || journal.runtime !== runtime || journal.base_url !== baseUrl
+    || typeof journal.agent_id !== 'string' || !journal.agent_id || (agentId && journal.agent_id !== agentId)
+    || !journal.session?.device_code || !journal.session?.poll_token) {
+    throw new Error('A recovery journal exists for a different connection. Resume its original runtime, agent and Studio URL before reconnecting.');
+  }
+  if (journal.credential) assertConnectionCredentialScope(journal.credential, { baseUrl, runtime, agentId: journal.agent_id });
+  if (Object.hasOwn(journal, 'live_env_sha256')) {
+    const digest = journal.live_env_sha256;
+    const promoted = journal.credential && liveEnv === formatEnvBody(journal.credential.env);
+    if ((digest !== null && (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)))
+      || (credentialDigest(liveEnv) !== digest && !promoted)) {
+      throw new Error('Connection recovery conflicts with a changed live credential bundle. Stopped without replacing it; inspect the saved handoff in Studio before retrying.');
+    }
+  } else if (liveEnv !== null && (config.agentId !== journal.agent_id
+    || !runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId) || normalizedBaseUrl(config.baseUrl) !== baseUrl)) {
+    // Pre-candidate journals lack the local snapshot. Never let their agent ID
+    // override a different live scope; the server still validates the predecessor.
+    throw new Error('Legacy connection recovery conflicts with the live runtime, agent or Studio URL; files were left unchanged.');
+  }
+  // A fresh explicit choice may differ from inherited config. Retain that
+  // original context for retries, rather than letting a new flag waive conflicts.
+  const explicitSelection = journal.live_env_sha256 === null
+    && journal.explicit_agent_selection?.agent_id === journal.agent_id
+    && journal.explicit_agent_selection?.configured_agent_id === config.agentId;
+  if (liveEnv === null && config.agentId !== 'osuite-cli' && config.agentId !== journal.agent_id && !explicitSelection) {
+    throw new Error('Connection recovery conflicts with the configured agent; files were left unchanged.');
+  }
+  if (journal.installation_id && journal.installation_id !== installation?.installation_id) {
+    throw new Error('Connection recovery installation identity changed or is missing; files were left unchanged.');
+  }
 }
 
 function orderedEnvEntries(env = {}) {
@@ -331,10 +393,11 @@ async function postJson(url, body) {
   return { response, payload };
 }
 
-async function startDeviceConnect({ baseUrl, runtime, agentId, previousKey }) {
+async function startDeviceConnect({ baseUrl, runtime, agentId, previousKey, installationId }) {
   const { response, payload } = await postJson(`${normalizedBaseUrl(baseUrl)}/api/onboarding/device-connect/start`, {
     runtime,
     agent_id: agentId,
+    ...(installationId ? { installation_id: installationId } : {}),
     project_root: process.cwd(),
     protocol_version: 2,
     client_version: pkg.version,
@@ -423,9 +486,10 @@ async function pollDeviceConnect({ baseUrl, deviceCode, pollToken, timeoutMs, in
   return null;
 }
 
-async function finalizeDeviceConnect(journal, journalPath) {
+async function finalizeDeviceConnect(journal, journalPath, validateLive) {
   const { credential, session, base_url: baseUrl } = journal;
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    validateLive();
     let result;
     try {
       result = await postJson(`${normalizedBaseUrl(baseUrl)}/api/onboarding/device-connect/ack`, {
@@ -435,6 +499,7 @@ async function finalizeDeviceConnect(journal, journalPath) {
     } catch {
       // A lost response may mean the transaction committed. Retry the same receipt.
     }
+    validateLive();
     if (result?.response.ok) {
       if (result.payload.status !== 'finalized' || result.payload.key_id !== credential.key_id || typeof result.payload.active !== 'boolean') {
         throw new Error('Studio did not confirm this saved connection. The recovery journal was left unchanged; retry the same osuite connect command.');
@@ -455,6 +520,19 @@ async function finalizeDeviceConnect(journal, journalPath) {
     await sleep(100 * (attempt + 1));
   }
   throw new Error('Could not confirm finalization. The recovery journal is saved; rerun the same osuite connect command to resume safely.');
+}
+
+function assertConnectionCredentialScope(credential, { baseUrl, runtime, agentId }) {
+  const adapter = { codex: 'codex_hooks', claude: 'claude_code_hooks', cursor: 'cursor_hooks' }[runtime] || runtime;
+  const env = credential?.env;
+  if (credential?.protocol_version !== 2 || !env || !credential.key_id || !credential.ack_token
+    || !env.OSUITE_API_KEY || !env.OSUITE_PRIVATE_KEY_BASE64
+    || typeof env.OSUITE_BASE_URL !== 'string' || normalizedBaseUrl(env.OSUITE_BASE_URL) !== baseUrl
+    || env.OSUITE_AGENT_ID !== agentId || env.OSUITE_RUNTIME_ADAPTER_ID !== adapter
+    || (credential.runtime !== undefined && credential.runtime !== runtime)
+    || (credential.agent_id !== undefined && credential.agent_id !== agentId)) {
+    throw new Error('Delivered credentials do not match this connection. No acknowledgement or local replacement was attempted; inspect this enrollment in Studio.');
+  }
 }
 
 function projectFilePath(relativePath) {
@@ -658,6 +736,7 @@ function printHelp() {
   write('  osuite external configure --provider babyblue_invinoveritas --mode shadow --api-key <key> --expected-source-class independent_mediator');
   write('  osuite connect [auto|codex|claude|cursor|sdk|mcp]  Detect runtime and start browser handoff');
   write('                                        --no-browser prints the link instead of opening it');
+  write('  osuite connect mcp --migrate-legacy       Move legacy MCP state locally; no enrollment or ACK');
   write('  osuite init [sdk|codex|claude|cursor|mcp]    Prepare a runtime lane');
   write('');
   write(c('Environment', ANSI.bold));
@@ -1104,7 +1183,7 @@ async function doctor() {
   write(c('Checking the local developer entry point.', ANSI.dim));
   write('');
 
-  const credentialChecks = [...CREDENTIAL_PATHS.flatMap((file) => [file, `${file}.connect.json`, `${file}.connect.lock`]), '.env']
+  const credentialChecks = [...CLI_CREDENTIAL_PATHS.flatMap((file) => [file, `${file}.identity.json`, `${file}.connect.json`, `${file}.connect.lock`]), MCP_MIGRATION_PATH, '.env']
     .map((relativePath) => inspectCredentialFile(process.cwd(), relativePath));
   const unsafeCredentials = credentialChecks.filter((check) => check.exists && !check.safe);
   for (const check of credentialChecks.filter((item) => item.exists)) {
@@ -1112,6 +1191,11 @@ async function doctor() {
   }
   if (unsafeCredentials.length) {
     write('Repair credential protection before running hooks. Reconnect to rotate any possibly exposed key; chmod alone cannot undo disclosure.');
+    process.exitCode = 1;
+    return false;
+  }
+  if (credentialChecks.some((check) => check.exists && check.relativePath === MCP_MIGRATION_PATH)) {
+    writeCheckLine('warn', 'MCP migration', 'resume osuite connect mcp --migrate-legacy before using either SDK or MCP.');
     process.exitCode = 1;
     return false;
   }
@@ -1179,7 +1263,10 @@ async function tryWalkthrough(args) {
   if (args._.length || Object.keys(args).some((key) => !['_', 'timeout-ms'].includes(key))) {
     throw new Error('osuite try accepts no command arguments: its output is fixed. Only --timeout-ms may be set.');
   }
-  for (const file of [...CREDENTIAL_PATHS, '.env']) {
+  if (inspectCredentialFile(process.cwd(), MCP_MIGRATION_PATH).exists) {
+    throw new Error('Resume osuite connect mcp --migrate-legacy before starting the walkthrough.');
+  }
+  for (const file of [...CLI_CREDENTIAL_PATHS, '.env']) {
     const check = inspectCredentialFile(process.cwd(), file);
     if (check.exists && !check.safe) throw new Error('Credential storage needs attention. Run osuite doctor before starting the walkthrough.');
     if (inspectCredentialFile(process.cwd(), `${file}.connect.json`).exists) {
@@ -1406,39 +1493,63 @@ async function init(target = 'generic', args = {}) {
 }
 
 async function connectProject(target = 'auto', args = {}) {
-  const config = readConfig();
   const runtime = detectRuntimeTarget(target);
+  const envPath = envPathForRuntime(runtime);
+  const journalPath = `${envPath}.connect.json`;
+  const liveEnv = args['dry-run'] ? null : readCredentialFile(process.cwd(), envPath);
+  const config = connectionConfig(runtime, liveEnv, { dryRun: Boolean(args['dry-run']) });
   const baseUrl = normalizedBaseUrl(args['base-url'] || config.baseUrl || DEFAULT_BASE_URL);
+  const saved = args['dry-run'] ? null : readCredentialFile(process.cwd(), journalPath);
+  let storedJournal = saved;
+  let journal = parseConnectionJournal(saved);
+  const existingInstallation = args['dry-run'] ? null : readInstallationIdentity(process.cwd(), envPath, runtime);
+  if (journal) {
+    assertRecoveryState(journal, { runtime, baseUrl, agentId: args['agent-id'], liveEnv, config, installation: existingInstallation });
+  } else if (liveEnv !== null && config.runtimeAdapterId && !runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId)) {
+    throw new Error('The live credential bundle belongs to a different runtime; it was left unchanged.');
+  }
+  // Validation above is read-only: even missing metadata must not be recreated
+  // over a conflicting live installation merely because a receipt is resumable.
+  const installation = existingInstallation || getInstallationIdentity(process.cwd(), envPath, runtime, { dryRun: Boolean(args['dry-run']) });
   const configuredAgentId = sanitizeConfiguredAgentId(
     runtime,
-    runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId)
-      ? envValue('OSUITE_AGENT_ID', 'DASHCLAW_AGENT_ID')
+    runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId) && config.agentId !== 'osuite-cli'
+      ? config.agentId
       : '',
   );
-  const agentId = String(args['agent-id'] || configuredAgentId || defaultAgentIdForRuntime(runtime));
+  const agentId = String(args['agent-id'] || journal?.agent_id || configuredAgentId || installation.agent_id);
+  const validateLive = (receipt = journal) => {
+    if (readCredentialFile(process.cwd(), journalPath) !== storedJournal) {
+      throw new Error('The connection recovery journal changed during this operation; it was left unchanged. Inspect the handoff in Studio before retrying.');
+    }
+    const current = readCredentialFile(process.cwd(), envPath);
+    assertRecoveryState(receipt, { runtime, baseUrl, agentId, liveEnv: current,
+      config: connectionConfig(runtime, current), installation: readInstallationIdentity(process.cwd(), envPath, runtime) });
+  };
+  const saveJournal = () => {
+    validateLive();
+    const body = `${JSON.stringify(journal)}\n`;
+    writeCredentialFile(process.cwd(), journalPath, body);
+    storedJournal = body;
+  };
   const dryRunCode = String(args.code || generateConnectCode()).trim() || generateConnectCode();
   let connectPayload = null;
   let code = dryRunCode;
   let handoffUrl = buildConnectHandoffUrl({ baseUrl, runtime, code });
   const hasApiKey = Boolean(config.apiKey);
-  const envPath = envPathForRuntime(runtime);
-  const journalPath = `${envPath}.connect.json`;
-  let journal = null;
-
   if (!args['dry-run']) {
-    const saved = readCredentialFile(process.cwd(), journalPath);
-    if (saved) {
-      try { journal = JSON.parse(saved); } catch { throw new Error('The saved connection recovery journal is invalid; it was left unchanged.'); }
-      if (journal.protocol_version !== 2 || journal.base_url !== baseUrl || journal.runtime !== runtime || journal.agent_id !== agentId || !journal.session?.device_code || !journal.session?.poll_token) {
-        throw new Error('A recovery journal exists for a different connection. Resume its original runtime, agent and Studio URL before reconnecting.');
-      }
+    if (journal) {
       connectPayload = journal.session;
     } else {
       const previousKey = normalizedBaseUrl(config.baseUrl) === baseUrl && runtimeMatchesConfiguredAdapter(runtime, config.runtimeAdapterId) && configuredAgentId === agentId ? config.apiKey : '';
-      connectPayload = await startDeviceConnect({ baseUrl, runtime, agentId, previousKey });
+      connectPayload = await startDeviceConnect({ baseUrl, runtime, agentId, previousKey, installationId: installation.installation_id });
       if (connectPayload.protocol_version === 2) {
-        journal = { protocol_version: 2, base_url: baseUrl, runtime, agent_id: agentId, session: connectPayload };
-        writeCredentialFile(process.cwd(), journalPath, `${JSON.stringify(journal)}\n`);
+        journal = { protocol_version: 2, base_url: baseUrl, runtime, agent_id: agentId, installation_id: installation.installation_id,
+          live_env_sha256: credentialDigest(liveEnv), session: connectPayload };
+        if (liveEnv === null && args['agent-id']) {
+          journal.explicit_agent_selection = { agent_id: agentId, configured_agent_id: config.agentId };
+        }
+        saveJournal();
       } else {
         if (hasApiKey && fs.existsSync(projectFilePath(envPath))) {
           throw new Error('This Studio does not support acknowledged reconnect. Upgrade Studio before replacing existing credentials; they were left unchanged.');
@@ -1472,7 +1583,7 @@ async function connectProject(target = 'auto', args = {}) {
     if (args['dry-run']) {
       write(`Dry run: would install project hook files for ${runtime}.`);
     } else {
-      install = await installRuntimeProjectBootstrap(runtime, args, { nextSteps: false });
+      install = await installRuntimeProjectBootstrap(runtime, { ...args, 'base-url': baseUrl }, { nextSteps: false });
     }
   } else {
     write(c('Runtime setup', ANSI.bold));
@@ -1506,18 +1617,25 @@ async function connectProject(target = 'auto', args = {}) {
           protocolVersion: connectPayload.protocol_version || 1,
         });
       } catch (error) {
-        if (journal && error.code === 'DEVICE_CONNECT_EXPIRED') removeCredentialFile(process.cwd(), journalPath);
+        if (journal && error.code === 'DEVICE_CONNECT_EXPIRED') {
+          validateLive();
+          removeCredentialFile(process.cwd(), journalPath);
+        }
         throw error;
       }
     }
 
     if (credential?.env) {
       if (journal) {
+        // Check both a fresh delivery and a journal resumed after process death.
+        assertConnectionCredentialScope(credential, { baseUrl, runtime, agentId });
+        validateLive();
         journal = { ...journal, credential };
         // fsync both the file and its directory before telling the server to retire
         // the old key. The live env stays unchanged until that transaction commits.
-        writeCredentialFile(process.cwd(), journalPath, `${JSON.stringify(journal)}\n`);
-        await finalizeDeviceConnect(journal, journalPath);
+        saveJournal();
+        await finalizeDeviceConnect(journal, journalPath, validateLive);
+        validateLive();
       }
       const result = writeCredentialFile(process.cwd(), envPath, formatEnvBody(credential.env));
       if (journal) removeCredentialFile(process.cwd(), journalPath);
@@ -1549,7 +1667,9 @@ async function connectProject(target = 'auto', args = {}) {
     } else {
       write('');
       write(c('Not connected: nobody approved this terminal in the browser in time.', ANSI.yellow));
-      write(`  Run osuite connect ${runtime} again for a new code${install?.ok ? '; the hook files are already installed, only the credentials are missing' : ''}.`);
+      write(journal
+        ? `  Run osuite connect ${runtime} again to resume this same pending connection; no new request is created while this code remains valid.`
+        : `  Run osuite connect ${runtime} again for a new code${install?.ok ? '; the hook files are already installed, only the credentials are missing' : ''}.`);
       write('  If the browser did not open, copy the handoff link above into it.');
       process.exitCode = 1;
     }
@@ -1568,11 +1688,70 @@ async function connectProject(target = 'auto', args = {}) {
 }
 
 async function connect(target = 'auto', args = {}) {
-  if (args['dry-run']) return connectProject(target, args);
   const runtime = detectRuntimeTarget(target);
-  const release = acquireCredentialLock(process.cwd(), envPathForRuntime(runtime));
-  try { return await connectProject(runtime, args); }
-  finally { release(); }
+  if (args['migrate-legacy'] && runtime !== 'mcp') throw new Error('Legacy migration requires osuite connect mcp --migrate-legacy.');
+  if (args['dry-run']) {
+    if (args['migrate-legacy']) return write(`Dry run: would move legacy MCP credentials, identity and journal from ${SDK_ENV_PATH} to ${MCP_ENV_PATH}; no network or file changes.`);
+    return connectProject(runtime, args);
+  }
+  const releases = [];
+  try {
+    if (args['migrate-legacy']) releases.push(acquireCredentialLock(process.cwd(), SDK_ENV_PATH));
+    releases.push(acquireCredentialLock(process.cwd(), envPathForRuntime(runtime)));
+    if (args['migrate-legacy']) return migrateLegacyMcp(args);
+    if (runtime === 'sdk' || runtime === 'mcp') {
+      if (readCredentialFile(process.cwd(), MCP_MIGRATION_PATH) !== null) {
+        throw new Error('MCP migration is incomplete. Resume osuite connect mcp --migrate-legacy before using either runtime.');
+      }
+      const legacy = readInstallationBundle(process.cwd(), SDK_ENV_PATH);
+      const legacyEnv = parseEnvBody(legacy.env || '');
+      const legacyConfig = readConfig(legacyEnv);
+      if (!runtimeMatchesConfiguredAdapter('sdk', legacyConfig.runtimeAdapterId)
+        && !runtimeMatchesConfiguredAdapter('mcp', legacyConfig.runtimeAdapterId)
+        && (legacyConfig.apiKey || legacyConfig.agentId !== 'osuite-cli' || legacyEnv.OSUITE_PRIVATE_KEY_BASE64 || legacyEnv.DASHCLAW_PRIVATE_KEY_BASE64)) {
+        throw new Error('Shared legacy credential ownership is ambiguous. Verify and declare its OSUITE_RUNTIME_ADAPTER_ID before connecting; MCP owners must then use osuite connect mcp --migrate-legacy. Files were left unchanged.');
+      }
+      if (legacyMcpPresent(legacy)) {
+        throw new Error('Legacy MCP state conflicts with the shared .osuite/.env namespace. Run osuite connect mcp --migrate-legacy to move it explicitly; no credentials were replaced.');
+      }
+    }
+    return await connectProject(runtime, args);
+  } finally { releases.reverse().forEach(release => release()); }
+}
+
+function legacyMcpPresent(bundle) {
+  const config = readConfig(parseEnvBody(bundle.env || ''));
+  const journal = parseConnectionJournal(bundle.journal);
+  let identity;
+  try { identity = bundle.identity === null ? null : JSON.parse(bundle.identity); }
+  catch { throw new Error('Invalid installation identity file; it was left unchanged.'); }
+  return runtimeMatchesConfiguredAdapter('mcp', config.runtimeAdapterId) || identity?.runtime === 'mcp' || journal?.runtime === 'mcp';
+}
+
+function migrateLegacyMcp(args) {
+  const inspected = readMcpMigration(process.cwd());
+  if (!inspected.manifest && Object.values(inspected.destination).some(body => body !== null)) {
+    throw new Error('MCP migration destination is already occupied; nothing was overwritten.');
+  }
+  const { bundle } = inspected;
+  if (!legacyMcpPresent(bundle)) throw new Error('No unambiguous legacy MCP installation to migrate; files were left unchanged.');
+  const config = readConfig(parseEnvBody(bundle.env || ''));
+  const installation = parseInstallationIdentity(bundle.identity, 'mcp');
+  const journal = parseConnectionJournal(bundle.journal);
+  if (bundle.env !== null && (!runtimeMatchesConfiguredAdapter('mcp', config.runtimeAdapterId) || config.agentId === 'osuite-cli')) {
+    throw new Error('Legacy MCP migration conflicts with an ambiguous or different live runtime; files were left unchanged.');
+  }
+  const baseUrl = normalizedBaseUrl(args['base-url'] || config.baseUrl || journal?.base_url);
+  if ((args['base-url'] && config.baseUrl && normalizedBaseUrl(config.baseUrl) !== baseUrl)
+    || (args['agent-id'] && args['agent-id'] !== config.agentId)) {
+    throw new Error('MCP migration cannot change the live agent or Studio URL; files were left unchanged.');
+  }
+  if (journal) assertRecoveryState(journal, { runtime: 'mcp', baseUrl, agentId: args['agent-id'], liveEnv: bundle.env, config, installation });
+  migrateMcpInstallation(process.cwd(), inspected);
+  write(`MCP migration complete: moved credentials, identity and recovery state to ${MCP_ENV_PATH}.`);
+  write('No enrollment, acknowledgement or server identity change was performed.');
+  write('Update the MCP launcher to read this env path before restarting it or connecting SDK in this project.');
+  write('Run osuite connect mcp to resume a saved handoff or rotate with the same identity. SDK continues to use .osuite/.env.');
 }
 
 async function main() {

@@ -51,6 +51,7 @@ async function studio(cwd, callback) {
       protocol_version: 2, key_id: state.starts > 1 ? `key_new_${state.starts}` : 'key_new', ack_token: 'synthetic-ack-token', runtime: 'sdk', agent_id: 'sdk-runtime',
       env: { OSUITE_BASE_URL: origin, OSUITE_API_KEY: 'synthetic-new-key', OSUITE_AGENT_ID: 'sdk-runtime', OSUITE_RUNTIME_ADAPTER_ID: 'sdk', OSUITE_PRIVATE_KEY_BASE64: 'synthetic-new-private-key' },
     };
+    Object.assign(credential.env, state.envOverrides || {});
     if (request.url.endsWith('/start')) {
       state.starts += 1;
       state.startBody = body;
@@ -74,6 +75,7 @@ async function studio(cwd, callback) {
       state.acks += 1;
       state.ackBody = body;
       state.liveAtAck = fs.readFileSync(path.join(cwd, envPath), 'utf8');
+      state.onAck?.();
       try {
         state.ackJournal = JSON.parse(fs.readFileSync(path.join(cwd, journalPath), 'utf8'));
         state.journalMode = fs.statSync(path.join(cwd, journalPath)).mode & 0o777;
@@ -108,6 +110,25 @@ async function studio(cwd, callback) {
 afterEach(() => directories.splice(0).forEach((directory) => fs.rmSync(directory, { recursive: true, force: true })));
 
 describe('CLI acknowledgement and recovery', () => {
+  it.each([
+    ['agent identity', { OSUITE_AGENT_ID: 'another-installation' }],
+    ['Studio origin', { OSUITE_BASE_URL: 'https://unrelated.example.invalid' }],
+    ['runtime', { OSUITE_RUNTIME_ADAPTER_ID: 'codex_hooks' }],
+    ['missing identity', { OSUITE_AGENT_ID: '' }],
+  ])('refuses delivered credentials with a mismatched %s before ACK or local replacement', async (_label, envOverrides) => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      state.envOverrides = envOverrides;
+      const result = await run(cwd, url);
+      expect(result.status).toBe(1);
+      expect(result.stdout + result.stderr).toContain('do not match this connection');
+      expect(state.acks).toBe(0);
+      expect(state.active).toBe('old');
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(oldBody);
+      expect(JSON.parse(fs.readFileSync(path.join(cwd, journalPath), 'utf8'))).not.toHaveProperty('credential');
+    });
+  });
+
   it.each(['start', 'poll', 'ack'])('does not forward %s credentials through a redirect', async phase => {
     const cwd = fixture();
     let forwarded = 0;
@@ -168,6 +189,128 @@ describe('CLI acknowledgement and recovery', () => {
       expect(state.starts).toBe(1);
       expect(state.active).toBe('new');
       expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toContain('synthetic-new-key');
+    });
+  });
+
+  it.each([
+    ['agent', body => body.replace('sdk-runtime', 'different-live-agent')],
+    ['key', body => body.replace('synthetic-old-key', 'different-live-key')],
+    ['runtime', body => body.replace('ADAPTER_ID=sdk', 'ADAPTER_ID=mcp')],
+    ['origin', body => `${body}OSUITE_BASE_URL=https://other.example.invalid\n`],
+  ])('refuses a resumed receipt after the live %s changes, before ACK or any identity/journal save', async (_label, change) => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      state.failAck = true;
+      expect((await run(cwd, url)).status).toBe(1);
+      const receipt = fs.readFileSync(path.join(cwd, journalPath), 'utf8');
+      const identityPath = path.join(cwd, `${envPath}.identity.json`);
+      fs.rmSync(identityPath);
+      const changed = change(oldBody);
+      fs.writeFileSync(path.join(cwd, envPath), changed, { mode: 0o600 });
+      const acks = state.acks;
+      const polls = state.polls;
+      state.failAck = false;
+
+      const result = await run(cwd, url);
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout + result.stderr).toMatch(/recovery|conflict|changed/i);
+      expect(state.starts).toBe(1);
+      expect(state.acks).toBe(acks);
+      expect(state.polls).toBe(polls);
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(changed);
+      expect(fs.readFileSync(path.join(cwd, journalPath), 'utf8')).toBe(receipt);
+      expect(fs.existsSync(identityPath)).toBe(false);
+      expect(result.stdout + result.stderr).not.toMatch(/synthetic-(?:old-key|new-key|ack-token)|different-live-key/);
+    });
+  });
+
+  it('rechecks the live bundle after polling, before saving or acknowledging a delivery', async () => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      const changed = oldBody.replace('sdk-runtime', 'different-live-agent');
+      state.onPoll = () => fs.writeFileSync(path.join(cwd, envPath), changed, { mode: 0o600 });
+      const result = await run(cwd, url);
+      expect(result.status).toBe(1);
+      expect(state.acks).toBe(0);
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(changed);
+      expect(JSON.parse(fs.readFileSync(path.join(cwd, journalPath), 'utf8'))).not.toHaveProperty('credential');
+    });
+  });
+
+  it('resumes an already-promoted receipt after interruption before journal removal', async () => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      expect((await run(cwd, url)).status).toBe(0);
+      const promoted = fs.readFileSync(path.join(cwd, envPath), 'utf8');
+      fs.writeFileSync(path.join(cwd, journalPath), `${JSON.stringify(state.ackJournal)}\n`, { mode: 0o600 });
+      const result = await run(cwd, url);
+      expect(result.status, result.stderr).toBe(0);
+      expect(state.starts).toBe(1);
+      expect(state.acks).toBe(2);
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(promoted);
+      expect(fs.existsSync(path.join(cwd, journalPath))).toBe(false);
+    });
+  });
+
+  it.each([false, true])('preserves a live replacement made during ACK (transient failure=%s)', async failAck => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      const changed = oldBody.replace('sdk-runtime', 'different-live-agent');
+      state.failAck = failAck;
+      state.onAck = () => fs.writeFileSync(path.join(cwd, envPath), changed, { mode: 0o600 });
+      const result = await run(cwd, url);
+      expect(result.status).toBe(1);
+      expect(state.acks).toBe(1);
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(changed);
+      expect(JSON.parse(fs.readFileSync(path.join(cwd, journalPath), 'utf8'))).toHaveProperty('credential');
+      expect(result.stdout).not.toContain('Connected to OSuite');
+    });
+  });
+
+  it.each(['poll', 'ack'])('preserves a journal replaced during %s instead of saving or clearing over it', async phase => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      const replacement = `${JSON.stringify({ protocol_version: 2, runtime: 'sdk', base_url: url, agent_id: 'different-live-agent',
+        session: { device_code: 'other-device', poll_token: 'other-poll' } })}\n`;
+      const replace = () => fs.writeFileSync(path.join(cwd, journalPath), replacement, { mode: 0o600 });
+      if (phase === 'poll') state.onPoll = replace;
+      else state.onAck = replace;
+      const result = await run(cwd, url);
+      expect(result.status).toBe(1);
+      expect(result.stdout + result.stderr).toMatch(/journal.*changed|changed.*journal/i);
+      expect(state.acks).toBe(phase === 'ack' ? 1 : 0);
+      expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(oldBody);
+      expect(fs.readFileSync(path.join(cwd, journalPath), 'utf8')).toBe(replacement);
+    });
+  });
+
+  it.each([false, true])('resumes legacy receipts only with the same live scope (conflict=%s)', async conflict => {
+    const cwd = fixture();
+    await studio(cwd, async (url, state) => {
+      const prior = `${oldBody}OSUITE_BASE_URL=${url}\n`;
+      fs.writeFileSync(path.join(cwd, envPath), prior, { mode: 0o600 });
+      state.failAck = true;
+      expect((await run(cwd, url)).status).toBe(1);
+      const journal = JSON.parse(fs.readFileSync(path.join(cwd, journalPath), 'utf8'));
+      delete journal.live_env_sha256;
+      fs.writeFileSync(path.join(cwd, journalPath), `${JSON.stringify(journal)}\n`, { mode: 0o600 });
+      const receipt = fs.readFileSync(path.join(cwd, journalPath), 'utf8');
+      const live = conflict ? prior.replace('sdk-runtime', 'different-live-agent') : prior;
+      fs.writeFileSync(path.join(cwd, envPath), live, { mode: 0o600 });
+      state.failAck = false;
+      const before = state.acks;
+      const result = await run(cwd, url);
+      expect(result.status, result.stderr).toBe(conflict ? 1 : 0);
+      expect(state.starts).toBe(1);
+      expect(state.acks - before).toBe(conflict ? 0 : 1);
+      if (conflict) {
+        expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toBe(live);
+        expect(fs.readFileSync(path.join(cwd, journalPath), 'utf8')).toBe(receipt);
+      } else {
+        expect(fs.readFileSync(path.join(cwd, envPath), 'utf8')).toContain('synthetic-new-key');
+        expect(fs.existsSync(path.join(cwd, journalPath))).toBe(false);
+      }
     });
   });
 

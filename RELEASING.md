@@ -24,7 +24,7 @@ an npm provenance attestation by itself.
    The workflow must not be dispatched by an implementation agent. If trusted
    publishing is not configured, fix that configuration; do not silently fall
    back to an unverified provenance claim or paste a token into a workflow.
-5. Verify `npm view osuite@2.10.1 dist.attestations --json`, the published tarball
+5. Verify `npm view osuite@2.10.2 dist.attestations --json`, the published tarball
    digest, `repository` metadata and a clean temporary `npx` installation. Only
    then update the release notice to say the npm version is available.
 

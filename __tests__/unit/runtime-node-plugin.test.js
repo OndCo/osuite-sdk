@@ -19,7 +19,7 @@ function isolatedPlugin() {
 describe('Standalone Node Codex plugin source package', () => {
   it('versions the Node release and publishes the planned public source URL', () => {
     const manifest = JSON.parse(readFileSync(path.join(source, '.codex-plugin/plugin.json'), 'utf8'));
-    expect(manifest.version).toBe('1.1.0');
+    expect(manifest.version).toBe('1.1.1');
     expect(manifest.repository).toBe('https://github.com/OndCo/osuite-sdk');
   });
 

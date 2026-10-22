@@ -140,9 +140,9 @@ describe('CLI credential storage', () => {
     expect(fs.statSync(file).mode & 0o777).toBe(0o644);
   });
 
-  it('ships credential fixes as SDK version 2.10.1', () => {
+  it('keeps credential and installation fixes in the new SDK candidate, without rewriting 2.10.1', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve('sdk/package.json'), 'utf8'));
-    expect(pkg.version).toBe('2.10.1');
+    expect(pkg.version).toBe('2.10.2');
   });
 
   it('doctor checks unsafe recovery credentials as well as the live env', async () => {

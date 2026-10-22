@@ -1,7 +1,7 @@
 # OSuite Codex Plugin
 
-Version 1.1.0 is the Node release of the packaged Codex integration for manually
-installed hook-capable hosts.
+Version 1.1.1 is the unpublished Node maintenance candidate for manually
+installed hook-capable hosts, aligned with the SDK 2.10.2 source candidate.
 Installing the files does not establish hook trust or invocation in a particular
 Codex app, CLI, or IDE release. Hook-bearing plugins are not public-directory
 qualified by the detached Node fixtures in this repository.

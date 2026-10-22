@@ -163,7 +163,7 @@ export function createMcpServer(localConfig, dependencies = {}) {
     const response = { jsonrpc: '2.0', id: request.id };
     if (request.method === 'initialize') return { ...response, result: {
       protocolVersion: ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'].includes(request.params?.protocolVersion) ? request.params.protocolVersion : '2025-11-25',
-      capabilities: { tools: {} }, serverInfo: { name: 'osuite_runtime_governance', version: '1.1.0-node' }, instructions: COVERAGE,
+      capabilities: { tools: {} }, serverInfo: { name: 'osuite_runtime_governance', version: '1.1.1-node' }, instructions: COVERAGE,
     } };
     if (request.method === 'ping') return { ...response, result: {} };
     if (request.method === 'tools/list') return { ...response, result: { tools: MCP_TOOLS } };

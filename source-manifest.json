@@ -35,7 +35,7 @@
       "source": "scripts/sdk-release/template/Formula/osuite.rb",
       "size": 559,
       "mode": 420,
-      "sha256": "9909af227bc33e5b9e1900fc0afddbfa920139da5502635c05a85b2464320447"
+      "sha256": "6639e5d83946d78bb851c2f5e3b74185dc502cec2e8b01b96a98c8720477caff"
     },
     {
       "path": "LICENSE",
@@ -47,16 +47,16 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 2611,
+      "size": 2621,
       "mode": 420,
-      "sha256": "c7c54bef3bbe438510635f59579b6f7ecb57d5fbc02e3e4c0973950298adbff4"
+      "sha256": "95d5d96f08184a4eb195949b5b88b56b8bfb91b1ccb33b6301751c9bf99e4751"
     },
     {
       "path": "RELEASING.md",
       "source": "scripts/sdk-release/template/RELEASING.md",
       "size": 3049,
       "mode": 420,
-      "sha256": "04a8f2b1950cb0bdc96ca705d3a308cbf21b639c8b9554d272aec36b93ce18d3"
+      "sha256": "5b9405a6673bb3b7456bb6b3c386a69bea9506143986ce76381b56a1cdacbfb8"
     },
     {
       "path": "SECURITY.md",
@@ -147,7 +147,7 @@
       "source": "__tests__/unit/runtime-node-plugin.test.js",
       "size": 5703,
       "mode": 420,
-      "sha256": "f8a0071767c1664f1d05b1497a6004afb33c38c5ed7e9cc90a557bc7bcfa7b47"
+      "sha256": "3ba8b84f0537b1b1590214a9c9dfbea763f116748bf14246bdfae26cf5e863ea"
     },
     {
       "path": "__tests__/unit/runtime-node-posture.test.js",
@@ -171,6 +171,13 @@
       "sha256": "bd310c83df443e25c124efb67f7925935e8c5f85935186c9bdfeebf484156487"
     },
     {
+      "path": "__tests__/unit/sdk-connection-scope.test.js",
+      "source": "__tests__/unit/sdk-connection-scope.test.js",
+      "size": 32905,
+      "mode": 420,
+      "sha256": "795277a99315b7d4e40bf8f5b112220bf2552b6fef6b60f371ec51fbd0a3bed5"
+    },
+    {
       "path": "__tests__/unit/sdk-credential-helper.test.js",
       "source": "__tests__/unit/sdk-credential-helper.test.js",
       "size": 4897,
@@ -180,9 +187,9 @@
     {
       "path": "__tests__/unit/sdk-credential-storage.test.js",
       "source": "__tests__/unit/sdk-credential-storage.test.js",
-      "size": 8221,
+      "size": 8267,
       "mode": 420,
-      "sha256": "065e250454b31ad1e9b17c00bada528bf47f33716401483ac79bc4f61f3e6655"
+      "sha256": "0cfb5bd2aa504c20e9c024fa5f1705d8cd4809d6c7faea5229231a94ce4ada9d"
     },
     {
       "path": "__tests__/unit/sdk-cursor-cli.test.js",
@@ -194,9 +201,23 @@
     {
       "path": "__tests__/unit/sdk-device-connect-recovery.test.js",
       "source": "__tests__/unit/sdk-device-connect-recovery.test.js",
-      "size": 11775,
+      "size": 19161,
       "mode": 420,
-      "sha256": "758b1840f531d968da9817d3004ce472ee535fec2fbd3cf0381ede725e939905"
+      "sha256": "272acb7821d3db0c3cc9c79357f3ad3f29ac3dbbe6d5e3e75fb35689aa690715"
+    },
+    {
+      "path": "__tests__/unit/sdk-installation-identity.test.js",
+      "source": "__tests__/unit/sdk-installation-identity.test.js",
+      "size": 3760,
+      "mode": 420,
+      "sha256": "ccfb95126af226d30dd0cde53b536ea8a5de79dab92114f0ec3976d858eb11cb"
+    },
+    {
+      "path": "__tests__/unit/sdk-multidevice-enrollment.test.js",
+      "source": "__tests__/unit/sdk-multidevice-enrollment.test.js",
+      "size": 4257,
+      "mode": 420,
+      "sha256": "201f2c9a47c85b86f669857b301bbe40fdc009a2e4bd50d5fe4f77b21ff3235e"
     },
     {
       "path": "__tests__/unit/sdk-package-contract.test.js",
@@ -206,25 +227,32 @@
       "sha256": "a25a79f8bc8a2ff054db9989d9ba6090318a56e0f4e4aedf1e8874eef9372b20"
     },
     {
+      "path": "__tests__/unit/sdk-rule-rollout-negotiation.test.js",
+      "source": "__tests__/unit/sdk-rule-rollout-negotiation.test.js",
+      "size": 8937,
+      "mode": 420,
+      "sha256": "c6e2e0b5354e2e1efa61f8d3f4fe336fd6d1689e9b087f6ca5fe70af519fda7f"
+    },
+    {
       "path": "package-lock.json",
       "source": "scripts/sdk-release/template/package-lock.json",
-      "size": 53657,
+      "size": 53252,
       "mode": 420,
-      "sha256": "e422571ca2c8697630d2ceea8569f80eb21fcb5fc42ea34cafe4a6c1a2b045d1"
+      "sha256": "96cc70aa4e25f566e2cc816021edbf7e96bf385d6d01552bec45258746c2a8ce"
     },
     {
       "path": "package.json",
       "source": "scripts/sdk-release/template/package.json",
       "size": 591,
       "mode": 420,
-      "sha256": "44e4b8f3674bcfb8dcaa770e175756a8fbc63673bd3195e779270be6a23b293e"
+      "sha256": "73be4aa41283bba089e1cf866017679f5d95d932772342ae1adcb10f324a23d3"
     },
     {
       "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
       "source": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
       "size": 1548,
       "mode": 420,
-      "sha256": "da36afc43410fe491673ea893a0eff5ee06dc89f0cac983745880133bb4e15e6"
+      "sha256": "1de70f02e56b0c07db9e5cecc84173fa2bdd568c1bc78b182b443411d9bef1c9"
     },
     {
       "path": "plugins/osuite-codex-governance/.mcp.json",
@@ -236,9 +264,9 @@
     {
       "path": "plugins/osuite-codex-governance/README.md",
       "source": "plugins/osuite-codex-governance/README.md",
-      "size": 4823,
+      "size": 4861,
       "mode": 420,
-      "sha256": "12abe7b50a7a9a036ad9ffaa67beac37213e1d30e292e9d7ef20f9b1b72942f4"
+      "sha256": "55612d501d287f88e1f5fd7d8ed70fe75523247d59d429bdc6e2ce32ec959cdb"
     },
     {
       "path": "plugins/osuite-codex-governance/config.toml.partial",
@@ -278,9 +306,9 @@
     {
       "path": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
       "source": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
-      "size": 88139,
+      "size": 98325,
       "mode": 420,
-      "sha256": "e895df9f253411e3ffaf46659fce68b536cdced7d749e83ef8682c844034303d"
+      "sha256": "26253c6bd3acb04a27ffaf7e63fafca73fe70a870d93ff24efe696afcd50b8df"
     },
     {
       "path": "plugins/osuite-codex-governance/hooks/osuite_session.mjs",
@@ -383,9 +411,9 @@
     {
       "path": "sdk/README.md",
       "source": "sdk/README.md",
-      "size": 27793,
+      "size": 30455,
       "mode": 420,
-      "sha256": "7df2a76611837b1709694efa0b198db3c89cbc659ab4d6a33bc441b6a81cc457"
+      "sha256": "badb6b91262688608071e3c2a6ce12051c3a24e69efa3ad9908ff136c8198f40"
     },
     {
       "path": "sdk/activationMetrics.js",
@@ -397,9 +425,9 @@
     {
       "path": "sdk/cli.js",
       "source": "sdk/cli.js",
-      "size": 68818,
+      "size": 80541,
       "mode": 493,
-      "sha256": "1aa7ec9dd81e3998e1b6a996999a04245a715c69a08869317fd59a1e481cc60e"
+      "sha256": "c443addcbc7fb68aae8e40138dc9f098655a7e77baa741aa0bd1e440b97cc1dc"
     },
     {
       "path": "sdk/credentials.js",
@@ -414,6 +442,13 @@
       "size": 1646,
       "mode": 420,
       "sha256": "0003335dd5ddcd5890538b51a2711b70f45e3e57b708294d48d551eae7179875"
+    },
+    {
+      "path": "sdk/installationIdentity.js",
+      "source": "sdk/installationIdentity.js",
+      "size": 6675,
+      "mode": 420,
+      "sha256": "e744eccbbccbf4db26c350d65ab51984fb75ca74cd1d73063bd134fceec1493c"
     },
     {
       "path": "sdk/legacy/index-v1.cjs",
@@ -446,9 +481,9 @@
     {
       "path": "sdk/package.json",
       "source": "sdk/package.json",
-      "size": 1292,
+      "size": 1323,
       "mode": 420,
-      "sha256": "2589c1ae3a6245ddc4252cbba30935a6fd896e93d3bb4ad847eaca11d312acb5"
+      "sha256": "e3714cddf215d1001b1aec3a5615eb66cec4112197abd61894e25f5f99eb7f37"
     },
     {
       "path": "sdk/projectHooks.js",
@@ -467,16 +502,16 @@
     {
       "path": "sdk/runtime/admission.mjs",
       "source": "sdk/runtime/admission.mjs",
-      "size": 9588,
+      "size": 14501,
       "mode": 420,
-      "sha256": "4aec6867d2cbe626474e333f5977dad88e7709789fcbebb5117d0bb9b7f26d97"
+      "sha256": "13110a767630931f03301cb5bbc6e26a3c06daa96e7a486ac3e13cf1a05f97af"
     },
     {
       "path": "sdk/runtime/config.mjs",
       "source": "sdk/runtime/config.mjs",
-      "size": 3332,
+      "size": 3491,
       "mode": 420,
-      "sha256": "5c0b6e0987fee117b3195f4fda768944445ffccd55c16a73ff2cae05b5b98b7f"
+      "sha256": "64835211aa621bfe9acf1cfe1ba77dbeb626ab3f76e7487d96c6cc8c63fa4e56"
     },
     {
       "path": "sdk/runtime/context.mjs",
@@ -502,16 +537,16 @@
     {
       "path": "sdk/runtime/hook.mjs",
       "source": "sdk/runtime/hook.mjs",
-      "size": 13619,
+      "size": 13804,
       "mode": 420,
-      "sha256": "1faf193b556f886578726b03db66b74145f93d7c82f10b8123295748db1bd736"
+      "sha256": "d28a3081f8a6cc69a307379a4b08eca0b681dd31bbd4678b16999af8afca040b"
     },
     {
       "path": "sdk/runtime/mcp.mjs",
       "source": "sdk/runtime/mcp.mjs",
       "size": 17262,
       "mode": 420,
-      "sha256": "897509ab27c5a85fb76bba80b4752d4426df5bdef4982f82a498d01d59018126"
+      "sha256": "f4975368687db209ec2c16cec1d3e2c63a7f896ada3ade4125975293129dc3dd"
     },
     {
       "path": "sdk/runtime/outcome.mjs",
@@ -523,16 +558,16 @@
     {
       "path": "sdk/runtime/posture.mjs",
       "source": "sdk/runtime/posture.mjs",
-      "size": 5980,
+      "size": 10855,
       "mode": 420,
-      "sha256": "58c8e4c05bdc487d18a7805b146e4d95179d9bd864ddf7f6ca981046b8d56e60"
+      "sha256": "e011c7e73497d8f3f6cd68b2a00eae8266cc4b707dd019dcac40427dbbc57f4f"
     },
     {
       "path": "sdk/runtime/protocol.mjs",
       "source": "sdk/runtime/protocol.mjs",
-      "size": 4715,
+      "size": 5125,
       "mode": 420,
-      "sha256": "62e959304dc1bccde4425f0bb0148821e509ea6c1076152aeda567d1ce8cdc83"
+      "sha256": "75367c5b3822ee66c5e5e8137586aec0465cbee25d5f662bc649033bb2a4a121"
     },
     {
       "path": "sdk/runtime/shell.mjs",

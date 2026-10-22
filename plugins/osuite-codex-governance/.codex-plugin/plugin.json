@@ -1,6 +1,6 @@
 {
   "name": "osuite-codex-governance",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Codex plugin that bundles OSuite hooks, MCP governance tools, and approval-aware behavior defaults.",
   "author": {
     "name": "Ond Holdings Inc.",

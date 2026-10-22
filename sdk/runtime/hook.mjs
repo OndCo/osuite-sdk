@@ -109,14 +109,16 @@ export async function runHook(data, localConfig, dependencies = {}) {
     const initialContext = pre ? buildActionContext(data, localConfig) : null;
     const store = dependencies.store || createStateStore(localConfig);
     const now = dependencies.now || Date.now;
-    let api = dependencies.api || createApiClient(localConfig);
+    const apiFactory = dependencies.apiFactory || createApiClient;
+    let api = dependencies.api || apiFactory(localConfig);
     if (event === 'PostToolUse' || event === 'PostToolUseFailure') {
       const result = await recordOutcome(localConfig, data, { api, store, now });
       return note(result.reason ? 'Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect.' : '');
     }
     const remote = await resolveRemotePosture(localConfig, { api, store, now: now() });
-    const config = applyPosture(localConfig, remote.posture);
-    api = dependencies.api || createApiClient(config);
+    const config = { ...applyPosture(localConfig, remote.posture), ruleRollout: remote.ruleRollout,
+      orgId: remote.orgId || localConfig.orgId };
+    api = dependencies.api || apiFactory(config);
     if (event === 'Stop') return stopHook(data, config, api, store);
     if (remote.blocked) return pre ? deny('Verified runtime posture is unavailable or expired. Execution is blocked; reconnect or restore access.')
       : note('Verified runtime posture is unavailable. Enforce hooks will block execution until it can be verified.');
@@ -152,17 +154,17 @@ export async function runHook(data, localConfig, dependencies = {}) {
       } catch { return deny('Cannot persist the exact-action receipt state. The admitted tool was not released; reconcile its action in Studio before retrying.'); }
       updatePending(store, context);
       await emitRuntimeEvent(api, config, context, 'tool_allowed', result.actionId, { decision: result.decision, install_check: config.installCheck === true });
-      return note(config.mode === 'observe' ? 'Observe mode recorded a policy result; it does not enforce OSuite policy.' : result.decision === 'warn' ? 'OSuite authorized this call with a policy warning.' : '');
+      return note(config.mode === 'observe' && !result.ruleRolloutBinding ? 'Observe mode recorded a policy result; it does not enforce OSuite policy.' : result.decision === 'warn' ? 'OSuite authorized this call with a policy warning.' : '');
     }
     if (result.decision === 'require_approval') {
-      if (config.mode !== 'observe') updatePending(store, context, { action_id: result.actionId, agent_id: config.agentId,
+      if (result.observeOnly !== true) updatePending(store, context, { action_id: result.actionId, agent_id: config.agentId,
         runtime_session_id: session, tool_input_digest: context.tool_input_digest, fingerprint: cavaFingerprint(result.response) });
-      await emitRuntimeEvent(api, config, context, 'tool_requires_approval', result.actionId, { decision: config.mode === 'observe' ? 'observe_would_require_approval' : result.response?.decision?.decision || 'require_approval' });
-      return config.mode === 'observe' ? note('Observe mode: this call would require human approval; it is not authorized by a reviewer.')
+      await emitRuntimeEvent(api, config, context, 'tool_requires_approval', result.actionId, { decision: result.observeOnly === true ? 'observe_would_require_approval' : result.response?.decision?.decision || 'require_approval' });
+      return result.observeOnly === true ? note('Observe mode: this call would require human approval; it is not authorized by a reviewer.')
         : deny(`Human approval is still required for action ${result.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
     }
-    await emitRuntimeEvent(api, config, context, 'tool_blocked', result.actionId, { decision: config.mode === 'observe' ? 'observe_would_block' : 'block', reason: result.reason });
-    return config.mode === 'observe' ? note('Observe mode: OSuite policy would block this call. It is not authorized by OSuite.')
+    await emitRuntimeEvent(api, config, context, 'tool_blocked', result.actionId, { decision: result.observeOnly === true ? 'observe_would_block' : 'block', reason: result.reason });
+    return result.observeOnly === true ? note('Observe mode: OSuite policy would block this call. It is not authorized by OSuite.')
       : deny(`OSuite policy did not authorize this exact action (${result.reason}). Do not retry automatically.`);
   } catch {
     return pre ? deny('Hook evidence or state is invalid. Execution is blocked; no successful admission is claimed.')

@@ -7,7 +7,7 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-The source version is 2.10.1. npm publication is a separate owner release;
+The candidate source version is 2.10.2. npm publication is a separate owner release;
 `npm view osuite version` shows what is actually available from the registry.
 To test this source without replacing a globally installed CLI:
 
@@ -22,7 +22,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-After npm 2.10.1 is published, use `npx osuite@2.10.1 connect`. A version-pinned
+After npm 2.10.2 is published, use `npx osuite@2.10.2 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 

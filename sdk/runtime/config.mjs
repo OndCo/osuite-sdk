@@ -1,5 +1,6 @@
 import { constants, closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { RULE_ROLLOUT_CAPABILITY } from './protocol.mjs';
 
 function readDotenv(installDir, filename = '.env') {
   let fd;
@@ -34,6 +35,7 @@ export function loadRuntimeConfig({ installDir, env = process.env, host = 'claud
   const mode = ['observe', 'enforce', 'strict'].includes(requestedMode) ? requestedMode : 'strict';
   return {
     host,
+    ruleRolloutCapability: get('SCOPED_RULE_ROLLOUT') === '1' ? RULE_ROLLOUT_CAPABILITY : undefined,
     runtimeId: get('RUNTIME_ADAPTER_ID', runtimeId || (host === 'cursor' ? 'cursor_hooks' : host === 'codex' ? 'codex_hooks' : 'claude_code_hooks')),
     agentId: get('AGENT_ID', plugin ? 'codex-plugin-runtime' : host === 'cursor' ? 'cursor' : host === 'codex' ? 'codex' : 'claude-code'),
     orgId: get('ORG_ID'), provider: get('RUNTIME_PROVIDER') || null,

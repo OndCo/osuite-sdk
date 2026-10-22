@@ -5,6 +5,7 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 
 // sdk/runtime/protocol.mjs
 import { createHash, createPrivateKey, sign } from "node:crypto";
+var RULE_ROLLOUT_CAPABILITY = "osuite.scoped_rule_rollout.v1";
 var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var sha256 = (value) => createHash("sha256").update(value).digest("hex");
 var safeId = (value) => typeof value === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}$/.test(value) && !value.includes("..");
@@ -27,7 +28,11 @@ function validatedBaseUrl(value, { allowInsecureHttp = false } = {}) {
     return null;
   }
 }
-function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutMs = 2500, maxResponseBytes = 262144 } = {}) {
+function createApiClient(config, {
+  fetchImpl = globalThis.fetch,
+  timeoutMs = 2500,
+  maxResponseBytes = config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY ? 1048576 : 262144
+} = {}) {
   return {
     async request(method, endpoint, body, options = {}) {
       const baseUrl = validatedBaseUrl(config.baseUrl, config);
@@ -65,7 +70,12 @@ function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutMs = 250
           method,
           redirect: "manual",
           signal: controller.signal,
-          headers: { "content-type": "application/json", "x-api-key": config.apiKey },
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": config.apiKey,
+            ...config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY ? { "x-osuite-runtime-capability": RULE_ROLLOUT_CAPABILITY } : {},
+            ...config.ruleRollout?.enabled ? { "x-osuite-rule-rollout-version": String(config.ruleRollout.version) } : {}
+          },
           ...payload === void 0 ? {} : { body: JSON.stringify(payload) }
         });
         status = response.status;
@@ -236,6 +246,7 @@ function loadRuntimeConfig({ installDir, env = process.env, host = "claude", run
   const mode = ["observe", "enforce", "strict"].includes(requestedMode) ? requestedMode : "strict";
   return {
     host,
+    ruleRolloutCapability: get("SCOPED_RULE_ROLLOUT") === "1" ? RULE_ROLLOUT_CAPABILITY : void 0,
     runtimeId: get("RUNTIME_ADAPTER_ID", runtimeId || (host === "cursor" ? "cursor_hooks" : host === "codex" ? "codex_hooks" : "claude_code_hooks")),
     agentId: get("AGENT_ID", plugin ? "codex-plugin-runtime" : host === "cursor" ? "cursor" : host === "codex" ? "codex" : "claude-code"),
     orgId: get("ORG_ID"),
@@ -267,6 +278,26 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 var POSTURE_SCHEMA = "osuite.runtime_posture.v1";
 var MAX_FRESHNESS_MS = 3e5;
 var MODE_STRENGTH = { observe: 0, enforce: 1, strict: 2 };
+var scopeKeys = ["org_id", "runtime_id", "agent_id", "provider", "connection_id"];
+function validAcknowledgement(value, config, now) {
+  const binding = value?.device_binding, issued = Date.parse(value?.acknowledged_at), expires = Date.parse(value?.expires_at);
+  return value?.schema_version === "osuite.rule_rollout_client.v1" && value.capability === RULE_ROLLOUT_CAPABILITY && isObject(value.scope) && Object.keys(value.scope).length === scopeKeys.length && scopeKeys.every((key) => safeId(value.scope[key])) && value.scope.runtime_id === config.runtimeId && value.scope.agent_id === config.agentId && (!config.orgId || value.scope.org_id === config.orgId) && (!config.provider || value.scope.provider === config.provider) && isObject(binding) && safeId(binding.credential_id) && binding.capability === RULE_ROLLOUT_CAPABILITY && Number.isSafeInteger(binding.connection_generation) && binding.connection_generation >= 1 && typeof binding.public_key_fingerprint === "string" && /^[a-f0-9]{64}$/.test(binding.public_key_fingerprint) && Number.isFinite(issued) && Number.isFinite(expires) && issued <= now + 3e4 && expires > now && expires > issued && expires - issued <= 9e5;
+}
+function matchesAcknowledgement(document, acknowledgement) {
+  return document.credential_id === acknowledgement.device_binding.credential_id && document.org_id === acknowledgement.scope.org_id && canonicalJson(document.rule_rollout?.scope) === canonicalJson(acknowledgement.scope) && document.rule_rollout?.credential_id === acknowledgement.device_binding.credential_id && document.rule_rollout?.connection_generation === acknowledgement.device_binding.connection_generation;
+}
+function preservesRolloutFloor(previous, current) {
+  const before = previous?.rule_rollout, after = current?.rule_rollout;
+  if (!before?.enabled) return true;
+  return after?.enabled === true && canonicalJson(before.scope) === canonicalJson(after.scope) && before.credential_id === after.credential_id && after.connection_generation >= before.connection_generation && after.version >= before.version && (after.version !== before.version || canonicalJson(before) === canonicalJson(after));
+}
+function validNegotiation(document, config, now) {
+  if (config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY) return true;
+  const rollout = document.rule_rollout;
+  if (!isObject(rollout) || rollout.schema_version !== "osuite.rule_rollout_negotiation.v1" || rollout.capability !== RULE_ROLLOUT_CAPABILITY || typeof rollout.enabled !== "boolean") return false;
+  if (!rollout.enabled) return true;
+  return isObject(rollout.scope) && Object.keys(rollout.scope).length === scopeKeys.length && scopeKeys.every((key) => safeId(rollout.scope[key])) && rollout.scope.org_id === document.org_id && rollout.scope.runtime_id === config.runtimeId && rollout.scope.agent_id === config.agentId && (!config.provider || rollout.scope.provider === config.provider) && rollout.credential_id === document.credential_id && Number.isSafeInteger(rollout.connection_generation) && rollout.connection_generation >= 1 && Number.isSafeInteger(rollout.version) && rollout.version >= 1 && Date.parse(rollout.expires_at) > now && rollout.strict_floor === true && document.posture?.mode === "strict" && document.posture?.on_guard_unavailable === "block" && document.posture?.require_signature === true;
+}
 function localPosture(config) {
   return {
     runtime_id: config.runtimeId,
@@ -295,6 +326,7 @@ function validDocument(value, config, now, allowExpired = false) {
   if (value.credential_fingerprint !== sha256(config.apiKey || "")) return false;
   if (value.targeting?.agent_id !== config.agentId || (value.targeting?.provider || null) !== (config.provider || null)) return false;
   if (typeof value.revision !== "string" || !/^[a-f0-9]{64}$/.test(value.revision)) return false;
+  if (!validNegotiation(value, config, allowExpired ? 0 : now)) return false;
   const posture = value.posture;
   if (!isObject(posture) || posture.runtime_id !== config.runtimeId || !Object.hasOwn(MODE_STRENGTH, posture.mode)) return false;
   if (!["allow", "block"].includes(posture.on_guard_unavailable)) return false;
@@ -315,7 +347,8 @@ function configurationOnly(document) {
     "posture",
     "revision",
     "issued_at",
-    "valid_until"
+    "valid_until",
+    ...document.rule_rollout ? ["rule_rollout"] : []
   ].map((key) => [key, document[key]]));
 }
 function mac(document, config) {
@@ -338,31 +371,64 @@ function readCache(store, config, now) {
   }
 }
 async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
+  const capable = config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY;
+  let acknowledged = null;
+  if (capable) {
+    const acknowledgement = await api.request("PUT", `/api/runtimes/${encodeURIComponent(config.runtimeId)}/posture`, {
+      capability: RULE_ROLLOUT_CAPABILITY,
+      runtime_id: config.runtimeId,
+      agent_id: config.agentId,
+      issued_at: new Date(now).toISOString()
+    }, { timeoutMs: 2e3 });
+    const value = acknowledgement.body;
+    if (!acknowledgement.ok || !validAcknowledgement(value, config, now)) {
+      return { available: false, blocked: true, source: "unavailable", posture: localPosture(config), revision: null };
+    }
+    acknowledged = value;
+  }
   const query = new URLSearchParams({ agent_id: config.agentId });
   if (config.provider) query.set("provider", config.provider);
   const response = await api.request("GET", `/api/runtimes/${encodeURIComponent(config.runtimeId)}/posture?${query}`, void 0, { timeoutMs: 2e3 });
+  const rejected = [401, 403, 409].includes(response.status);
   let cached = readCache(store, config, now);
-  if (response.ok && response.status === 200 && validDocument(response.body, config, now) && (!cached || Date.parse(response.body.issued_at) >= Date.parse(cached.issued_at))) {
+  if (response.ok && response.status === 200 && validDocument(response.body, config, now) && (!capable || matchesAcknowledgement(response.body, acknowledged)) && preservesRolloutFloor(cached, response.body) && (!cached || Date.parse(response.body.issued_at) >= Date.parse(cached.issued_at))) {
     const document = configurationOnly(response.body);
     try {
       const saved = store.update("posture", (value) => {
         const latest = cachedDocument(value, config, now);
-        return latest && Date.parse(latest.issued_at) > Date.parse(document.issued_at) ? value : { document, mac: mac(document, config) };
+        return latest && (Date.parse(latest.issued_at) > Date.parse(document.issued_at) || !preservesRolloutFloor(latest, document)) ? value : { document, mac: mac(document, config) };
       });
       cached = cachedDocument(saved, config, now);
       if (cached && canonicalJson(cached) === canonicalJson(document)) {
-        return { available: true, blocked: false, source: "remote", posture: document.posture, revision: document.revision };
+        return {
+          available: true,
+          blocked: false,
+          source: "remote",
+          posture: document.posture,
+          revision: document.revision,
+          ruleRollout: document.rule_rollout,
+          orgId: document.org_id
+        };
       }
     } catch {
       const posture2 = offlinePosture(offlinePosture(localPosture(config), readCache(store, config, now)?.posture), document.posture);
-      return { available: false, blocked: posture2.mode !== "observe", source: "unavailable", posture: posture2, revision: cached?.revision || null };
+      return { available: false, blocked: capable || posture2.mode !== "observe", source: "unavailable", posture: posture2, revision: cached?.revision || null };
     }
   }
   const posture = offlinePosture(localPosture(config), cached?.posture);
-  if (response.status !== 401 && response.status !== 403 && cached && Date.parse(cached.valid_until) > now) {
-    return { available: true, blocked: false, source: "cache", posture, revision: cached.revision };
+  if (!rejected && !(capable && response.ok) && cached && Date.parse(cached.valid_until) > now && validNegotiation(cached, config, now)) {
+    if (capable && !matchesAcknowledgement(cached, acknowledged)) return { available: false, blocked: true, source: "unavailable", posture, revision: cached.revision };
+    return {
+      available: true,
+      blocked: false,
+      source: "cache",
+      posture,
+      revision: cached.revision,
+      ruleRollout: cached.rule_rollout,
+      orgId: cached.org_id
+    };
   }
-  return { available: false, blocked: posture.mode !== "observe", source: "unavailable", posture, revision: cached?.revision || null };
+  return { available: false, blocked: rejected || capable || posture.mode !== "observe", source: "unavailable", posture, revision: cached?.revision || null };
 }
 
 // sdk/runtime/shell.mjs
@@ -844,6 +910,28 @@ import { setTimeout as delay } from "node:timers/promises";
 var REVIEW_DECISIONS = /* @__PURE__ */ new Set(["require_approval", "require_dual_approval"]);
 var DECISIONS = /* @__PURE__ */ new Set(["allow", "warn", "block", ...REVIEW_DECISIONS]);
 var closed = (reason, extra = {}) => ({ authorized: false, decision: "block", reason, retryAutomatically: false, ...extra });
+function rolloutSnapshots(payload) {
+  const current = isObject(payload?.decision) ? payload.decision : payload;
+  return [
+    current?.policy_snapshot,
+    payload?.contracts?.policy_snapshot,
+    payload?.action?.policy_snapshot,
+    payload?.action?.proof_bundle?.policy_snapshot,
+    payload?.contracts?.proof_bundle?.policy_snapshot
+  ].filter(isObject);
+}
+function rolloutAuthority(payload, context, config, expected) {
+  const current = isObject(payload?.decision) ? payload.decision : payload;
+  const snapshots = rolloutSnapshots(payload);
+  const present = [current, ...snapshots].filter(isObject).some((value) => Object.hasOwn(value, "rule_rollout") || Object.hasOwn(value, "rule_rollout_binding"));
+  const negotiated = config.ruleRollout;
+  if (!present && !expected && !negotiated?.enabled) return { valid: true, binding: null };
+  const binding = current?.rule_rollout_binding, report = current?.rule_rollout;
+  const scopeKeys2 = ["org_id", "runtime_id", "agent_id", "provider", "connection_id"];
+  const digest = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  if (expected === null || !isObject(binding) || !isObject(report) || negotiated && !negotiated.enabled || binding.schema_version !== "osuite.rule_rollout_binding.v1" || binding.enforcement_required !== true || !isObject(binding.scope) || Object.keys(binding.scope).length !== scopeKeys2.length || scopeKeys2.some((key) => !safeId(binding.scope[key]) || binding.scope[key].length > 128) || binding.scope.agent_id !== config.agentId || binding.scope.agent_id !== context.agent_id || binding.scope.runtime_id !== config.runtimeId || negotiated?.enabled && (binding.version !== negotiated.version || canonicalJson(binding.scope) !== canonicalJson(negotiated.scope) || binding.credential_id !== negotiated.credential_id || binding.connection_generation !== negotiated.connection_generation || binding.expires_at !== negotiated.expires_at) || config.orgId && binding.scope.org_id !== config.orgId || config.provider && binding.scope.provider !== config.provider || !Number.isSafeInteger(binding.version) || binding.version < 1 || !Number.isFinite(approvalTime(binding.expires_at)) || approvalTime(binding.expires_at) <= Date.now() || !safeId(binding.runtime_session_id) || binding.runtime_session_id !== context.runtime_session_id || !digest(binding.tool_input_digest) || binding.tool_input_digest !== context.tool_input_digest || !binding.action_type || binding.action_type !== context.action_type || !digest(binding.policy_context_fingerprint) || binding.policy_context_fingerprint !== current.policy_context_fingerprint || report.schema_version !== "osuite.rule_rollout_evaluation.v1" || report.status !== "evaluated" || report.version !== binding.version || report.expires_at !== binding.expires_at || canonicalJson(report.scope) !== canonicalJson(binding.scope) || !isObject(current.policy_snapshot) || !snapshots.length || current.policy_snapshot.effective_decision !== ({ block: "deny", warn: "allow_with_evidence" }[current.decision] || current.decision) || snapshots.some((snapshot) => canonicalJson(snapshot.rule_rollout_binding) !== canonicalJson(binding) || canonicalJson(snapshot.rule_rollout) !== canonicalJson(report)) || expected && canonicalJson(binding) !== canonicalJson(expected)) return { valid: false, binding: null };
+  return { valid: true, binding };
+}
 function approvalReceipts(payload) {
   const action = payload?.action || payload || {};
   return [
@@ -922,31 +1010,37 @@ function installCheck(payload, context) {
 async function admitAction(context, { api, config, sleep = delay, now = () => performance.now(), beforeRelease = async () => true } = {}) {
   const guard = await api.request("POST", "/api/guard", context);
   if (!guard.ok) {
-    const failOpen = config.guardFailureMode === "allow" && ![401, 403].includes(guard.status) && !["signing_unavailable", "invalid_response", "invalid_request"].includes(guard.error);
+    const failOpen = config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY && !config.ruleRollout?.enabled && config.guardFailureMode === "allow" && ![401, 403, 409].includes(guard.status) && !["signing_unavailable", "invalid_response", "invalid_request"].includes(guard.error);
     return { ...closed("guard_unavailable"), decision: failOpen ? "allow" : "block", degraded: true };
   }
   const requestedDecision = guard.body?.decision;
   if (!DECISIONS.has(requestedDecision)) return closed("unsupported_guard_decision");
+  const rollout = rolloutAuthority(guard.body, context, config);
+  if (!rollout.valid) return closed("rule_rollout_binding_invalid");
+  const finish = (result4) => rollout.binding ? { ...result4, observeOnly: false, ruleRolloutBinding: rollout.binding } : result4;
   if (requestedDecision === "block") {
-    if (config.mode === "observe") await api.request("POST", "/api/actions", { ...context, status: "blocked" });
-    return { ...closed("policy_block"), observeOnly: config.mode === "observe", response: guard.body };
+    const observeOnly = config.mode === "observe" && !rollout.binding;
+    if (observeOnly) await api.request("POST", "/api/actions", { ...context, status: "blocked" });
+    return finish({ ...closed("policy_block"), observeOnly, response: guard.body });
   }
   const created = await api.request("POST", "/api/actions", {
     ...context,
     status: REVIEW_DECISIONS.has(requestedDecision) ? "pending_approval" : "running"
   });
   if (!created.ok) return closed("admission_unconfirmed");
+  if (!rolloutAuthority(created.body, context, config, rollout.binding).valid) return closed("rule_rollout_binding_invalid");
   const diagnostic = installCheck(created.body, context);
-  if (diagnostic) return diagnostic;
-  let result3 = actionAdmission(created.body, requestedDecision, context);
+  if (diagnostic) return finish(diagnostic);
+  let result3 = finish(actionAdmission(created.body, requestedDecision, context));
   if (result3.authorized) return await beforeRelease(result3.response) ? result3 : closed("action_evidence_changed");
   if (result3.decision !== "require_approval") return result3;
-  if (config.mode === "observe") return { ...result3, observeOnly: true };
+  if (config.mode === "observe" && !rollout.binding) return { ...result3, observeOnly: true };
   const expected = { actionId: result3.actionId, fingerprint: cavaFingerprint(created.body) };
   const waitMs = Math.max(0, Math.min(config.approvalWaitMs ?? 3e4, 6e5));
   const deadline = now() + waitMs;
   while (now() < deadline) {
     await sleep(Math.min(3e3, Math.max(0, deadline - now())));
+    if (rollout.binding && approvalTime(rollout.binding.expires_at) <= Date.now()) return closed("rule_rollout_expired", { actionId: expected.actionId });
     const polled = await api.request("GET", `/api/actions/${encodeURIComponent(expected.actionId)}`, void 0, {
       timeoutMs: Math.max(1, Math.min(2500, deadline - now()))
     });
@@ -956,6 +1050,12 @@ async function admitAction(context, { api, config, sleep = delay, now = () => pe
     }
     const action = polled.body?.action || polled.body;
     if (!matchesAction(polled.body, context, expected)) return closed("approval_binding_mismatch", { actionId: expected.actionId });
+    if (rollout.binding) {
+      const snapshots = rolloutSnapshots(polled.body);
+      if (!snapshots.length || snapshots.some((snapshot) => canonicalJson(snapshot.rule_rollout_binding) !== canonicalJson(rollout.binding))) {
+        return closed("rule_rollout_binding_invalid", { actionId: expected.actionId });
+      }
+    }
     if (action.status === "pending_approval") continue;
     if (action.status !== "running") return closed("approval_closed", { actionId: expected.actionId });
     if (action.approval_redeemed_at != null || action.timestamp_end != null) return closed("execution_outcome_unknown", { actionId: expected.actionId });
@@ -964,7 +1064,8 @@ async function admitAction(context, { api, config, sleep = delay, now = () => pe
     }
     const current = await api.request("POST", "/api/actions", { ...context, status: "running" });
     if (!current.ok) return closed("admission_unconfirmed", { actionId: expected.actionId });
-    result3 = actionAdmission(current.body, "allow", context, expected);
+    if (!rolloutAuthority(current.body, context, config, rollout.binding).valid) return closed("rule_rollout_binding_invalid", { actionId: expected.actionId });
+    result3 = finish(actionAdmission(current.body, "allow", context, expected));
     if (result3.authorized && !await beforeRelease(result3.response)) return closed("action_evidence_changed", { actionId: result3.actionId });
     return result3;
   }
@@ -1201,14 +1302,19 @@ async function runHook(data, localConfig, dependencies = {}) {
     const initialContext = pre ? buildActionContext(data, localConfig) : null;
     const store = dependencies.store || createStateStore(localConfig);
     const now = dependencies.now || Date.now;
-    let api = dependencies.api || createApiClient(localConfig);
+    const apiFactory = dependencies.apiFactory || createApiClient;
+    let api = dependencies.api || apiFactory(localConfig);
     if (event === "PostToolUse" || event === "PostToolUseFailure") {
       const result4 = await recordOutcome(localConfig, data, { api, store, now });
       return note(result4.reason ? "Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect." : "");
     }
     const remote = await resolveRemotePosture(localConfig, { api, store, now: now() });
-    const config = applyPosture(localConfig, remote.posture);
-    api = dependencies.api || createApiClient(config);
+    const config = {
+      ...applyPosture(localConfig, remote.posture),
+      ruleRollout: remote.ruleRollout,
+      orgId: remote.orgId || localConfig.orgId
+    };
+    api = dependencies.api || apiFactory(config);
     if (event === "Stop") return stopHook(data, config, api, store);
     if (remote.blocked) return pre ? deny("Verified runtime posture is unavailable or expired. Execution is blocked; reconnect or restore access.") : note("Verified runtime posture is unavailable. Enforce hooks will block execution until it can be verified.");
     if (!pre && event !== "SessionStart" && event !== "SessionEnd") return note("Unsupported hook event; no execution decision was made.");
@@ -1251,21 +1357,21 @@ async function runHook(data, localConfig, dependencies = {}) {
       }
       updatePending(store, context);
       await emitRuntimeEvent(api, config, context, "tool_allowed", result3.actionId, { decision: result3.decision, install_check: config.installCheck === true });
-      return note(config.mode === "observe" ? "Observe mode recorded a policy result; it does not enforce OSuite policy." : result3.decision === "warn" ? "OSuite authorized this call with a policy warning." : "");
+      return note(config.mode === "observe" && !result3.ruleRolloutBinding ? "Observe mode recorded a policy result; it does not enforce OSuite policy." : result3.decision === "warn" ? "OSuite authorized this call with a policy warning." : "");
     }
     if (result3.decision === "require_approval") {
-      if (config.mode !== "observe") updatePending(store, context, {
+      if (result3.observeOnly !== true) updatePending(store, context, {
         action_id: result3.actionId,
         agent_id: config.agentId,
         runtime_session_id: session,
         tool_input_digest: context.tool_input_digest,
         fingerprint: cavaFingerprint(result3.response)
       });
-      await emitRuntimeEvent(api, config, context, "tool_requires_approval", result3.actionId, { decision: config.mode === "observe" ? "observe_would_require_approval" : result3.response?.decision?.decision || "require_approval" });
-      return config.mode === "observe" ? note("Observe mode: this call would require human approval; it is not authorized by a reviewer.") : deny(`Human approval is still required for action ${result3.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
+      await emitRuntimeEvent(api, config, context, "tool_requires_approval", result3.actionId, { decision: result3.observeOnly === true ? "observe_would_require_approval" : result3.response?.decision?.decision || "require_approval" });
+      return result3.observeOnly === true ? note("Observe mode: this call would require human approval; it is not authorized by a reviewer.") : deny(`Human approval is still required for action ${result3.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
     }
-    await emitRuntimeEvent(api, config, context, "tool_blocked", result3.actionId, { decision: config.mode === "observe" ? "observe_would_block" : "block", reason: result3.reason });
-    return config.mode === "observe" ? note("Observe mode: OSuite policy would block this call. It is not authorized by OSuite.") : deny(`OSuite policy did not authorize this exact action (${result3.reason}). Do not retry automatically.`);
+    await emitRuntimeEvent(api, config, context, "tool_blocked", result3.actionId, { decision: result3.observeOnly === true ? "observe_would_block" : "block", reason: result3.reason });
+    return result3.observeOnly === true ? note("Observe mode: OSuite policy would block this call. It is not authorized by OSuite.") : deny(`OSuite policy did not authorize this exact action (${result3.reason}). Do not retry automatically.`);
   } catch {
     return pre ? deny("Hook evidence or state is invalid. Execution is blocked; no successful admission is claimed.") : note("Runtime evidence could not be recorded. No completion or authorization is claimed.");
   }
@@ -1490,7 +1596,7 @@ function createMcpServer(localConfig, dependencies = {}) {
     if (request.method === "initialize") return { ...response, result: {
       protocolVersion: ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"].includes(request.params?.protocolVersion) ? request.params.protocolVersion : "2025-11-25",
       capabilities: { tools: {} },
-      serverInfo: { name: "osuite_runtime_governance", version: "1.1.0-node" },
+      serverInfo: { name: "osuite_runtime_governance", version: "1.1.1-node" },
       instructions: COVERAGE
     } };
     if (request.method === "ping") return { ...response, result: {} };

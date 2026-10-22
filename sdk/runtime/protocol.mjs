@@ -1,5 +1,7 @@
 import { createHash, createPrivateKey, sign } from 'node:crypto';
 
+export const RULE_ROLLOUT_CAPABILITY = 'osuite.scoped_rule_rollout.v1';
+
 export const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}$/.test(value) && !value.includes('..');
@@ -24,7 +26,8 @@ export function validatedBaseUrl(value, { allowInsecureHttp = false } = {}) {
   } catch { return null; }
 }
 
-export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutMs = 2500, maxResponseBytes = 262144 } = {}) {
+export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutMs = 2500,
+  maxResponseBytes = config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY ? 1048576 : 262144 } = {}) {
   return {
     async request(method, endpoint, body, options = {}) {
       const baseUrl = validatedBaseUrl(config.baseUrl, config);
@@ -60,7 +63,9 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
       try {
         const response = await fetchImpl(baseUrl + endpoint, {
           method, redirect: 'manual', signal: controller.signal,
-          headers: { 'content-type': 'application/json', 'x-api-key': config.apiKey },
+          headers: { 'content-type': 'application/json', 'x-api-key': config.apiKey,
+            ...(config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY ? { 'x-osuite-runtime-capability': RULE_ROLLOUT_CAPABILITY } : {}),
+            ...(config.ruleRollout?.enabled ? { 'x-osuite-rule-rollout-version': String(config.ruleRollout.version) } : {}) },
           ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
         });
         status = response.status;
