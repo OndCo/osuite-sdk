@@ -1,7 +1,7 @@
 # Owner Release Procedure
 
-This source package has not been published to npm by the engineering agent.
-Only the package owner initiates registry publication. Publishing the public
+Treat a source candidate as "not been published" until the registry and its
+provenance have been verified. Only the package owner initiates registry publication. Publishing the public
 repository or a GitHub source release is not npm publication and does not create
 an npm provenance attestation by itself.
 
@@ -9,7 +9,8 @@ an npm provenance attestation by itself.
 
 1. Confirm the final live dedicated-workspace canary and source commit. Confirm
    deployed Studio accepts V2 enrollment and can finish acknowledged recovery.
-2. Run `npm ci`, `npm run verify:source`, `npm test` and `npm run test:compat`.
+2. On Node 24/POSIX, run `npm ci`, `npm run verify:source`, `npm test`,
+   `npm run test:compat` and `npm run test:governed-tools`.
    Run `npm run pack:sdk` and review the actual tarball in `output/`. It must contain no
    private Studio source, credentials, customer files or unrelated research.
 3. Confirm npm ownership, package version, public repository metadata and active
@@ -24,7 +25,7 @@ an npm provenance attestation by itself.
    The workflow must not be dispatched by an implementation agent. If trusted
    publishing is not configured, fix that configuration; do not silently fall
    back to an unverified provenance claim or paste a token into a workflow.
-5. Verify `npm view osuite@2.10.2 dist.attestations --json`, the published tarball
+5. Verify `npm view osuite@2.11.0 dist.attestations --json`, the published tarball
    digest, `repository` metadata and a clean temporary `npx` installation. Only
    then update the release notice to say the npm version is available.
 

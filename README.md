@@ -7,7 +7,7 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-The candidate source version is 2.10.2. npm publication is a separate owner release;
+This source describes version 2.11.0. npm publication is a separate owner release;
 `npm view osuite version` shows what is actually available from the registry.
 To test this source without replacing a globally installed CLI:
 
@@ -22,7 +22,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-After npm 2.10.2 is published, use `npx osuite@2.10.2 connect`. A version-pinned
+After confirming `npm view osuite@2.11.0 version`, use `npx osuite@2.11.0 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
@@ -33,12 +33,18 @@ npm ci
 npm run verify:source
 npm test
 npm run test:compat
+# Node 24/POSIX only:
+npm run test:governed-tools
 ```
 
 Contributor tests use Node 20.19+ because of Vitest. The shipped SDK has no npm
 runtime dependencies and targets Node 18+. A separate built-in test runner checks
-Node 18 compatibility, independent of Vitest. CI records the actual tested Node
-and operating-system combinations; it does not certify untested vendor hosts.
+Node 18 compatibility, independent of Vitest. The opt-in `osuite/governed-tools`
+entry requires Node 24/POSIX; it preserves supported native calls and recovers
+held operations without automatically repeating possibly sent effects. See the
+[native-tool integration guide](sdk/GOVERNED_TOOLS.md). CI records the actual
+tested Node and operating-system combinations; it does not certify untested
+vendor hosts.
 
 `source-manifest.json` lists the reviewed files and SHA-256 of their exact bytes.
 It is an inventory, not a cryptographic publisher signature or authorization.

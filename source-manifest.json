@@ -5,16 +5,16 @@
     {
       "path": ".github/workflows/ci.yml",
       "source": "scripts/sdk-release/template/.github/workflows/ci.yml",
-      "size": 1158,
+      "size": 1297,
       "mode": 420,
-      "sha256": "93d99d2cd2d0ae7ead17a76b08bec03a61a4ef82fbbbfa562d14fe13e6be335a"
+      "sha256": "cd1ede886d2c5896bc0b966e9bf771e7c8a72e53cc34e5a73542e274b55d2bdd"
     },
     {
       "path": ".github/workflows/publish.yml",
       "source": "scripts/sdk-release/template/.github/workflows/publish.yml",
-      "size": 1470,
+      "size": 1511,
       "mode": 420,
-      "sha256": "6103c041b88556b6af715c663d2afe53c5870e3af28b0d33205b3f65dc7412dc"
+      "sha256": "b8a7a5f07601cd4d5ac13552c3616389eb581a10ac4a463de39f3e78fadc528d"
     },
     {
       "path": ".gitignore",
@@ -35,7 +35,7 @@
       "source": "scripts/sdk-release/template/Formula/osuite.rb",
       "size": 559,
       "mode": 420,
-      "sha256": "6639e5d83946d78bb851c2f5e3b74185dc502cec2e8b01b96a98c8720477caff"
+      "sha256": "30c0e1293a596ba381ad112abce9a307d59cd9265bd17a0db1b3a1acd3a992c6"
     },
     {
       "path": "LICENSE",
@@ -47,16 +47,16 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 2621,
+      "size": 2938,
       "mode": 420,
-      "sha256": "95d5d96f08184a4eb195949b5b88b56b8bfb91b1ccb33b6301751c9bf99e4751"
+      "sha256": "a910a7189d8ee191301b09e60fef83bc0b01f4b67e79d67f7be4270bc5ca91b3"
     },
     {
       "path": "RELEASING.md",
       "source": "scripts/sdk-release/template/RELEASING.md",
-      "size": 3049,
+      "size": 3132,
       "mode": 420,
-      "sha256": "5b9405a6673bb3b7456bb6b3c386a69bea9506143986ce76381b56a1cdacbfb8"
+      "sha256": "22029a98cd4b442d51b2a46538feef4c915f72e796dd053b80e10802eb3d4d81"
     },
     {
       "path": "SECURITY.md",
@@ -187,9 +187,9 @@
     {
       "path": "__tests__/unit/sdk-credential-storage.test.js",
       "source": "__tests__/unit/sdk-credential-storage.test.js",
-      "size": 8267,
+      "size": 8273,
       "mode": 420,
-      "sha256": "0cfb5bd2aa504c20e9c024fa5f1705d8cd4809d6c7faea5229231a94ce4ada9d"
+      "sha256": "ece754ea57e6dfc1d1cf949532aa751da95717e76b5c06100a45681885291893"
     },
     {
       "path": "__tests__/unit/sdk-cursor-cli.test.js",
@@ -204,6 +204,13 @@
       "size": 19161,
       "mode": 420,
       "sha256": "272acb7821d3db0c3cc9c79357f3ad3f29ac3dbbe6d5e3e75fb35689aa690715"
+    },
+    {
+      "path": "__tests__/unit/sdk-governed-tools-package.test.js",
+      "source": "__tests__/unit/sdk-governed-tools-package.test.js",
+      "size": 1545,
+      "mode": 420,
+      "sha256": "05fd224e2edb45869646e44e7d57b96df3e2596d3593a051893dedf62c182615"
     },
     {
       "path": "__tests__/unit/sdk-installation-identity.test.js",
@@ -238,14 +245,14 @@
       "source": "scripts/sdk-release/template/package-lock.json",
       "size": 53252,
       "mode": 420,
-      "sha256": "96cc70aa4e25f566e2cc816021edbf7e96bf385d6d01552bec45258746c2a8ce"
+      "sha256": "b191cc5c99544cda772c6ee4f91966ce187b9a0f43d1893aa107b42e51085df4"
     },
     {
       "path": "package.json",
       "source": "scripts/sdk-release/template/package.json",
-      "size": 591,
+      "size": 668,
       "mode": 420,
-      "sha256": "73be4aa41283bba089e1cf866017679f5d95d932772342ae1adcb10f324a23d3"
+      "sha256": "b56f175e41d0ad3ee774fd62c1944df1c709f5b5735f31b86e3675b8d4a61640"
     },
     {
       "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
@@ -402,6 +409,13 @@
       "sha256": "b42d9971a5d228f290fca4edf2273e5a61ab52635a30ea8247b2ec0314425546"
     },
     {
+      "path": "sdk/GOVERNED_TOOLS.md",
+      "source": "sdk/GOVERNED_TOOLS.md",
+      "size": 10488,
+      "mode": 420,
+      "sha256": "6081330cd7d97eebad3ecd283a5cb92079ed08132d6d4f25caeacc20b6252790"
+    },
+    {
       "path": "sdk/LICENSE",
       "source": "sdk/LICENSE",
       "size": 1071,
@@ -411,9 +425,9 @@
     {
       "path": "sdk/README.md",
       "source": "sdk/README.md",
-      "size": 30455,
+      "size": 30748,
       "mode": 420,
-      "sha256": "badb6b91262688608071e3c2a6ce12051c3a24e69efa3ad9908ff136c8198f40"
+      "sha256": "27930efac1bcc92dcaa3b1c76f29010af3b286450474a2977e8663bf14499923"
     },
     {
       "path": "sdk/activationMetrics.js",
@@ -435,6 +449,104 @@
       "size": 10736,
       "mode": 420,
       "sha256": "a771aa4cd69922ea35dbc7c5f464f582368fb5e57b94649bbc638d5f5b8ebcc8"
+    },
+    {
+      "path": "sdk/governed-tools.mjs",
+      "source": "sdk/governed-tools.mjs",
+      "size": 452,
+      "mode": 420,
+      "sha256": "05b006d3331cbc62dc8953250858aac03379ddbcda77e3582f0e094367c2ea0f"
+    },
+    {
+      "path": "sdk/governed-tools/authority.mjs",
+      "source": "sdk/governed-tools/authority.mjs",
+      "size": 7699,
+      "mode": 420,
+      "sha256": "b6874ec014ec8b62fa48731ddea6d1d308579930beabda989c18755d629dd2c2"
+    },
+    {
+      "path": "sdk/governed-tools/contract.mjs",
+      "source": "sdk/governed-tools/contract.mjs",
+      "size": 8422,
+      "mode": 420,
+      "sha256": "d2dde5fac84b1f89f878c19352a4ef5bf5e21c5be9af9e4b9d45e2a6b41a1be1"
+    },
+    {
+      "path": "sdk/governed-tools/examples/native-client.mjs",
+      "source": "sdk/governed-tools/examples/native-client.mjs",
+      "size": 2903,
+      "mode": 420,
+      "sha256": "021e307cca39f8b04b76965c8a36ee7b3b8fc4afba69a33f90670ed363e191ad"
+    },
+    {
+      "path": "sdk/governed-tools/executor.mjs",
+      "source": "sdk/governed-tools/executor.mjs",
+      "size": 11571,
+      "mode": 420,
+      "sha256": "61cf14878cf06021c2e9946815277c98ea2803f303aa66cebd46972f983d7c68"
+    },
+    {
+      "path": "sdk/governed-tools/journal.mjs",
+      "source": "sdk/governed-tools/journal.mjs",
+      "size": 21302,
+      "mode": 420,
+      "sha256": "9b076b69ce583dd396eac48bf720678721f476a94ecebd20d7a3b81190e24ab3"
+    },
+    {
+      "path": "sdk/governed-tools/mcp.mjs",
+      "source": "sdk/governed-tools/mcp.mjs",
+      "size": 4438,
+      "mode": 420,
+      "sha256": "f37513f20eccb302ab8a7cabec20481d4fb97eac4194f8e88d190b39572b872d"
+    },
+    {
+      "path": "sdk/governed-tools/test/contract.test.mjs",
+      "source": "sdk/governed-tools/test/contract.test.mjs",
+      "size": 5749,
+      "mode": 420,
+      "sha256": "02db971f5ebe55cdc7c07795169af18c485c48f3fce4f536245b49dc4fd90b38"
+    },
+    {
+      "path": "sdk/governed-tools/test/executor.test.mjs",
+      "source": "sdk/governed-tools/test/executor.test.mjs",
+      "size": 20366,
+      "mode": 420,
+      "sha256": "0f5d1cb26123662567fb7654d750f26be5d2c1ffde4a5cf32b110017429816e1"
+    },
+    {
+      "path": "sdk/governed-tools/test/journal.test.mjs",
+      "source": "sdk/governed-tools/test/journal.test.mjs",
+      "size": 47884,
+      "mode": 420,
+      "sha256": "b3db15f264fc3ab1ce045b5ecd116270208eee60e3b3fb1024d740711099510d"
+    },
+    {
+      "path": "sdk/governed-tools/test/mcp.test.mjs",
+      "source": "sdk/governed-tools/test/mcp.test.mjs",
+      "size": 34560,
+      "mode": 420,
+      "sha256": "4579841b5249da3c9059b27bc99c7c516bc2069502673357751741928a144cb4"
+    },
+    {
+      "path": "sdk/governed-tools/test/process-recovery.child.mjs",
+      "source": "sdk/governed-tools/test/process-recovery.child.mjs",
+      "size": 2629,
+      "mode": 420,
+      "sha256": "3ed7eef7c7555d900e77491b8459097e5e3e67134fad67b1a7e0541e781f1ba5"
+    },
+    {
+      "path": "sdk/governed-tools/test/process-recovery.test.mjs",
+      "source": "sdk/governed-tools/test/process-recovery.test.mjs",
+      "size": 15173,
+      "mode": 420,
+      "sha256": "030bace3533b326b66911852e7f1f70896ae6ae0ef84f10cb45d2fd2a5d2b441"
+    },
+    {
+      "path": "sdk/governed-tools/test/studio.fixture.mjs",
+      "source": "sdk/governed-tools/test/studio.fixture.mjs",
+      "size": 7316,
+      "mode": 420,
+      "sha256": "c9ded96a8d9ff60d4a5ca1ca06b050e42e4c216a0634b66ca2e1411e8330dbf3"
     },
     {
       "path": "sdk/index.cjs",
@@ -481,9 +593,9 @@
     {
       "path": "sdk/package.json",
       "source": "sdk/package.json",
-      "size": 1323,
+      "size": 1511,
       "mode": 420,
-      "sha256": "e3714cddf215d1001b1aec3a5615eb66cec4112197abd61894e25f5f99eb7f37"
+      "sha256": "c36dbea6983eb6332c294090db5cb1a3148bb9004bad94ae7bfa622b4510aa0b"
     },
     {
       "path": "sdk/projectHooks.js",

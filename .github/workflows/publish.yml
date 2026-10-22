@@ -25,6 +25,7 @@ jobs:
       - run: npm run verify:source
       - run: npm test
       - run: npm run test:compat
+      - run: npm run test:governed-tools
       - run: npm run pack:sdk
   publish:
     needs: qualify

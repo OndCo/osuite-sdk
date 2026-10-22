@@ -1,8 +1,12 @@
-# OSuite SDK (v2.10.2 Release Candidate)
+# OSuite SDK (v2.11.0)
 
 **Governed action SDK for AI agents.**
 
 The OSuite SDK helps teams route approvals, record governed decisions, and produce replayable evidence for AI agent activity.
+
+The opt-in Node 24 `osuite/governed-tools` entry preserves native tool calls
+and adds durable approval recovery. See [Native Tool Compatibility](GOVERNED_TOOLS.md).
+It is not in the published 2.10.2 package and does not enable Hook or a gateway.
 
 ## Installation
 
@@ -13,7 +17,7 @@ npm install osuite
 
 ### Connect And Verify
 
-For the checked-out 2.10.2 candidate source, run from the project you want to connect:
+For a checked-out SDK source tree, run from the project you want to connect:
 
 ```bash
 node /absolute/path/to/osuite-sdk/sdk/cli.js connect
@@ -21,11 +25,11 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-After the owner publishes 2.10.2 to npm, the equivalent pinned command is
-`npx osuite@2.10.2 connect`. A source release does not mean that npm's `latest`
-already contains it. Check `npm view osuite version` before relying on the new
-installation-identity or acknowledged-recovery behavior. npm's latest was 2.10.1
-when checked on 2026-10-22; this checkout is not a registry publication.
+For this version, use `npx osuite@2.11.0 connect` after confirming availability
+with `npm view osuite@2.11.0 version`. A source checkout or this document alone
+does not establish registry publication, and npm's `latest` may differ from the
+checked-out version. The stable credential-recovery behavior and the new
+native-call operation journal are different mechanisms.
 
 The alternative installer follows npm's published `latest`:
 
@@ -61,7 +65,9 @@ Slack and email notifications require configured workspace channels.
 
 ## The Governance Loop
 
-The SDK transports requests; it does not execute your tool. A guard evaluation or
+The default SDK transports requests; it does not execute your tool. The opt-in
+native-tool wrapper invokes only the callback explicitly supplied to it.
+A guard evaluation or
 `waitForApproval()` result is not execution authorization on its own. A secure
 integration must preserve all four steps:
 
@@ -535,7 +541,7 @@ identity; use an explicit new `--agent-id` if retaining the old project director
 Preserve historical records and signing keys instead of reassigning past actions
 to the replacement. A client-side installation ID is not permission to rotate.
 
-### SDK and MCP Credential Separation (2.10.2 Candidate)
+### SDK and MCP Credential Separation (Since 2.10.2)
 
 SDK connections use `.osuite/.env`; MCP connections use `.osuite/mcp/.env`.
 Their installation metadata and recovery journals live beside their respective
@@ -559,8 +565,8 @@ rather than deleting its marker or copying credentials. Update the MCP launcher'
 credential-file reference to `.osuite/mcp/.env` before restarting it or creating an
 SDK connection. The command does not rewrite vendor launchers or enable hooks.
 
-This section describes the unpublished 2.10.2 candidate. Do not use a previous
-published CLI version to perform the new migration.
+Use version 2.10.2 or newer for this credential migration. It does not install or
+activate the separate native-tool execution wrapper.
 
 `doctor` separates hook configuration, project enablement, credentials, connectivity, telemetry, and an enforced policy outcome. Observation-only mode, an unavailable guard (whether fail-open or fail-closed), or telemetry without a matching policy outcome does not pass the governance check. Hook warnings are printed even when the probe otherwise succeeds. The probe never executes its sample tool command and does not prove the host loaded the hooks: start or restart the runtime and verify its actual hook invocation separately.
 

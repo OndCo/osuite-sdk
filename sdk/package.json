@@ -1,6 +1,6 @@
 {
   "name": "osuite",
-  "version": "2.10.2",
+  "version": "2.11.0",
   "description": "OSuite governed action SDK for AI agents. Approve, replay, prove, and verify runtime decisions.",
   "type": "module",
   "publishConfig": {
@@ -19,6 +19,9 @@
     "./legacy": {
       "import": "./legacy/osuite-v1.js",
       "require": "./legacy/index-v1.cjs"
+    },
+    "./governed-tools": {
+      "import": "./governed-tools.mjs"
     }
   },
   "files": [
@@ -29,6 +32,10 @@
     "tryFlow.js",
     "tryContract.js",
     "runtime/",
+    "governed-tools.mjs",
+    "governed-tools/*.mjs",
+    "governed-tools/examples/*.mjs",
+    "GOVERNED_TOOLS.md",
     "projectHooks.js",
     "reviewSurface.js",
     "osuite.js",

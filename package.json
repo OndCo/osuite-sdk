@@ -1,6 +1,6 @@
 {
   "name": "osuite-sdk-source",
-  "version": "2.10.2",
+  "version": "2.11.0",
   "private": true,
   "type": "module",
   "description": "Standalone OSuite SDK and Hook source verification",
@@ -8,6 +8,7 @@
   "scripts": {
     "test": "vitest run",
     "test:compat": "node --test tests/compat.test.mjs",
+    "test:governed-tools": "node --test sdk/governed-tools/test/*.test.mjs",
     "verify:source": "node scripts/verify-source.mjs",
     "build:plugin": "node plugins/osuite-codex-governance/hooks/build-node-runtime.mjs",
     "pack:sdk": "node scripts/pack-sdk.mjs"
