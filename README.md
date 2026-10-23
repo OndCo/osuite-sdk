@@ -7,8 +7,10 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-This source describes version 2.11.2. npm publication is a separate owner release;
-`npm view osuite version` shows what is actually available from the registry.
+Version 2.11.2 is [published on npm](https://www.npmjs.com/package/osuite/v/2.11.2)
+through the trusted publisher. Its [versioned release](https://github.com/OndCo/osuite-sdk/releases/tag/v2.11.2)
+includes the same verified archive. `npm view osuite version` reports the current
+registry version; publishing source alone is not proof of npm availability.
 To test this source without replacing a globally installed CLI:
 
 ```sh
@@ -22,7 +24,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-Only after confirming `npm view osuite@2.11.2 version`, use `npx osuite@2.11.2 connect`. A version-pinned
+To connect with the published CLI, use `npx osuite@2.11.2 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
@@ -56,8 +58,9 @@ change what a vendor host does when its Hook process crashes or times out.
 Version 2.11.2 corrects concurrent atomic state replacement,
 bounded journal contention and admission aging during local durable I/O. It
 does not replay action POSTs, native effects or uncertain operations. The
-immutable 2.11.1 package does not include these follow-up changes; confirm
-registry availability before installing the update.
+immutable 2.11.1 package does not include these follow-up changes. Upgrade
+explicitly and retain existing business operation IDs and durable journals;
+an uncertain operation must not be recreated or automatically resent.
 
 `source-manifest.json` lists the reviewed files and SHA-256 of their exact bytes.
 It is an inventory, not a cryptographic publisher signature or authorization.

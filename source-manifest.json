@@ -35,7 +35,7 @@
       "source": "scripts/sdk-release/template/Formula/osuite.rb",
       "size": 559,
       "mode": 420,
-      "sha256": "9d622f1d5077cbdaeb1453765a087963dd1ef4912b1a080f97c4262b48577466"
+      "sha256": "b0a7da9bef1d2163ead5702f6d6cd29a0b4d04bec6587bb7d3dd3a24b0298369"
     },
     {
       "path": "LICENSE",
@@ -47,9 +47,9 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 3737,
+      "size": 4004,
       "mode": 420,
-      "sha256": "4231e5d93dfa82eed1e0905e1f19a723cf62cb09e02cccfe272ee66314bb0290"
+      "sha256": "cc2589af751ea4b94c914da2479db8e774d9c792b710996e097446c6009b7a91"
     },
     {
       "path": "RELEASING.md",
