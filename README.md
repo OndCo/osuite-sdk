@@ -7,7 +7,7 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-This source describes version 2.11.0. npm publication is a separate owner release;
+This source describes version 2.11.1. npm publication is a separate owner release;
 `npm view osuite version` shows what is actually available from the registry.
 To test this source without replacing a globally installed CLI:
 
@@ -22,7 +22,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-After confirming `npm view osuite@2.11.0 version`, use `npx osuite@2.11.0 connect`. A version-pinned
+After confirming `npm view osuite@2.11.1 version`, use `npx osuite@2.11.1 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
@@ -45,6 +45,13 @@ held operations without automatically repeating possibly sent effects. See the
 [native-tool integration guide](sdk/GOVERNED_TOOLS.md). CI records the actual
 tested Node and operating-system combinations; it does not certify untested
 vendor hosts.
+
+Version 2.11.1 defaults handled Hook guard failures to blocking, separates
+service outages from rejected or malformed requests, retains rejection across
+posture-cache reuse, and adds same-ID recovery guidance. Explicit optional
+non-strict outage allowances are ungoverned, not approvals. See the
+[failure-handling boundary](sdk/README.md#failure-handling-in-2111); this does not
+change what a vendor host does when its Hook process crashes or times out.
 
 `source-manifest.json` lists the reviewed files and SHA-256 of their exact bytes.
 It is an inventory, not a cryptographic publisher signature or authorization.

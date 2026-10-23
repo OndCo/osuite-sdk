@@ -695,11 +695,19 @@ function writeCheckLine(status, label, detail) {
 
 // A telemetry-only result must never count as successful governance.
 async function verifyProjectHooks(runtimes) {
-  const installations = findHookInstallations(process.cwd(), runtimes);
+  const installations = findHookInstallations(process.cwd(), runtimes, { diagnose: true });
   const checks = [];
   for (const installation of installations) {
+    const { diagnostics } = installation;
+    writeCheckLine(diagnostics.status === 'current' ? 'ok' : 'warn', 'Hook freshness', `${installation.label}: ${diagnostics.status === 'current'
+      ? 'managed Node runtime and launcher bytes match this CLI; not a registry/latest-version or native-host verification'
+      : 'Not verified against this CLI\'s packaged Node runtime; probe success cannot establish installation freshness'}`);
+    diagnostics.warnings.forEach(warning => writeCheckLine('warn', 'Install warning', `${installation.label}: ${warning}`));
+    if (diagnostics.status !== 'current') {
+      writeCheckLine('warn', 'Install next step', `Upgrade the OSuite CLI, then run osuite connect ${installation.runtime}; review preserved custom differences before replacing files. Disabled hooks remain disabled.`);
+    }
     const check = await runHookCheck({ projectRoot: process.cwd(), installation, shellEnv: SHELL_ENV });
-    check.steps.forEach((step) => writeCheckLine(step.ok ? 'ok' : 'fail', step.label, `${installation.label}: ${step.detail}`));
+    check.steps.forEach((step) => writeCheckLine(step.ok ? 'ok' : step.warning ? 'warn' : 'fail', step.label, `${installation.label}: ${step.detail}`));
     (check.warnings || []).forEach((warning) => writeCheckLine('warn', 'Hook warning', `${installation.label}: ${warning}`));
     checks.push({ installation, ...check });
   }
@@ -1181,6 +1189,7 @@ async function doctor() {
 
   write(c('OSuite Doctor', `${ANSI.bold}${ANSI.cyan}`));
   write(c('Checking the local developer entry point.', ANSI.dim));
+  write(c('Project diagnosis does not enumerate system-managed, plugin, or global hook copies.', ANSI.dim));
   write('');
 
   const credentialChecks = [...CLI_CREDENTIAL_PATHS.flatMap((file) => [file, `${file}.identity.json`, `${file}.connect.json`, `${file}.connect.lock`]), MCP_MIGRATION_PATH, '.env']
@@ -1246,7 +1255,13 @@ async function doctor() {
       write('  export OSUITE_API_KEY=<workspace-api-key>');
     }
     hookChecks.filter((check) => !check.ok).forEach((check) => {
-      write(`  ${check.installation.label} is not governed yet. Fix the FAIL line above, or run osuite connect ${check.installation.runtime} to reinstall, then run osuite doctor again.`);
+      if (!check.installation.hostEnabled) {
+        write(`  ${check.installation.label} hooks remain disabled by project settings; doctor did not enable or reinstall anything.`);
+      } else if (check.installation.diagnostics.canProbe === false && !check.installation.problems.length) {
+        write(`  ${check.installation.label} direct hook probe is not verified. Review the WARN lines above, then run osuite doctor again.`);
+      } else {
+        write(`  ${check.installation.label} is not governed yet. Fix the FAIL line above, then run osuite doctor again.`);
+      }
     });
     process.exitCode = 1;
     return false;
@@ -1255,6 +1270,7 @@ async function doctor() {
   write(c('Your OSuite CLI is ready.', ANSI.green));
   hookChecks.forEach((check) => {
     write(`  ${check.installation.label} direct hook probe was governed and reached OSuite; verify host invocation after starting the runtime.`);
+    if (check.installation.diagnostics.status !== 'current') write(`  ${check.installation.label} installation freshness remains not verified; the probe does not certify a current Node installation.`);
   });
   return true;
 }

@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import { canonicalJson, isObject, safeId, RULE_ROLLOUT_CAPABILITY } from './protocol.mjs';
+import { canonicalJson, isObject, isTransientFailure, safeId, RULE_ROLLOUT_CAPABILITY } from './protocol.mjs';
 
 export const REVIEW_DECISIONS = new Set(['require_approval', 'require_dual_approval']);
 const DECISIONS = new Set(['allow', 'warn', 'block', ...REVIEW_DECISIONS]);
@@ -142,9 +142,11 @@ function installCheck(payload, context) {
 export async function admitAction(context, { api, config, sleep = delay, now = () => performance.now(), beforeRelease = async () => true } = {}) {
   const guard = await api.request('POST', '/api/guard', context);
   if (!guard.ok) {
-    const failOpen = config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY && !config.ruleRollout?.enabled
-      && config.guardFailureMode === 'allow' && ![401, 403, 409].includes(guard.status)
-      && !['signing_unavailable', 'invalid_response', 'invalid_request'].includes(guard.error);
+    // Rejection, bad evidence and unknown errors are not availability failures.
+    if (!isTransientFailure(guard)) return closed('guard_rejected', { rejectedStatus: guard.status });
+    const failOpen = ['observe', 'enforce'].includes(config.mode)
+      && config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY && !config.ruleRollout?.enabled
+      && config.guardFailureMode === 'allow';
     return { ...closed('guard_unavailable'), decision: failOpen ? 'allow' : 'block', degraded: true };
   }
   const requestedDecision = guard.body?.decision;
@@ -155,13 +157,18 @@ export async function admitAction(context, { api, config, sleep = delay, now = (
   if (requestedDecision === 'block') {
     // Observation still persists the would-block result, but never calls it authority.
     const observeOnly = config.mode === 'observe' && !rollout.binding;
-    if (observeOnly) await api.request('POST', '/api/actions', { ...context, status: 'blocked' });
+    if (observeOnly) {
+      const recorded = await api.request('POST', '/api/actions', { ...context, status: 'blocked' });
+      if (!recorded.ok && (!isTransientFailure(recorded) || config.guardFailureMode !== 'allow')) {
+        return closed('admission_unconfirmed', { rejectedStatus: recorded.status });
+      }
+    }
     return finish({ ...closed('policy_block'), observeOnly, response: guard.body });
   }
   const created = await api.request('POST', '/api/actions', {
     ...context, status: REVIEW_DECISIONS.has(requestedDecision) ? 'pending_approval' : 'running',
   });
-  if (!created.ok) return closed('admission_unconfirmed');
+  if (!created.ok) return closed('admission_unconfirmed', { rejectedStatus: created.status });
   if (!rolloutAuthority(created.body, context, config, rollout.binding).valid) return closed('rule_rollout_binding_invalid');
   const diagnostic = installCheck(created.body, context);
   if (diagnostic) return finish(diagnostic);
@@ -180,7 +187,7 @@ export async function admitAction(context, { api, config, sleep = delay, now = (
       timeoutMs: Math.max(1, Math.min(2500, deadline - now())),
     });
     if (!polled.ok) {
-      if ([401, 403].includes(polled.status)) return closed('approval_access_rejected', { actionId: expected.actionId });
+      if ([401, 403, 409].includes(polled.status)) return closed('approval_access_rejected', { actionId: expected.actionId, rejectedStatus: polled.status });
       continue;
     }
     const action = polled.body?.action || polled.body;
@@ -199,7 +206,7 @@ export async function admitAction(context, { api, config, sleep = delay, now = (
     }
     // GET observes a grant. Only this fresh POST may redeem it. Never retry a lost reply.
     const current = await api.request('POST', '/api/actions', { ...context, status: 'running' });
-    if (!current.ok) return closed('admission_unconfirmed', { actionId: expected.actionId });
+    if (!current.ok) return closed('admission_unconfirmed', { actionId: expected.actionId, rejectedStatus: current.status });
     if (!rolloutAuthority(current.body, context, config, rollout.binding).valid) return closed('rule_rollout_binding_invalid', { actionId: expected.actionId });
     result = finish(actionAdmission(current.body, 'allow', context, expected));
     if (result.authorized && !await beforeRelease(result.response)) return closed('action_evidence_changed', { actionId: result.actionId });

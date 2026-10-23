@@ -7,13 +7,41 @@ export const ADMISSION_PATH = 'studio-current-action';
 const unsafeKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const id = value => safeId(value) && value.length <= 128;
 
+const recoveryMessages = Object.freeze({
+  review_same_operation: 'Open the existing review URL. Resume with the same operation ID and unchanged arguments only after review; current authority is checked again. Status reads never execute the tool.',
+  read_business_result: 'This operation already completed. Read the original result from your application store; OSuite retains its digest, not the full output. Do not send the tool call again.',
+  reconcile_without_resend: 'Keep the operation ID and journal. Read the existing action and resource evidence with an authorized operator; an unknown or mismatched result is not proof that nothing executed. Do not resend.',
+  restore_connection: 'Restore the correct connection and current credentials, then read status for the same operation ID. Do not replace its ID or clear its journal to work around rejection.',
+  repair_journal: 'Preserve the journal and stop new sends. Ask an operator to inspect storage permissions, capacity and verified backups; never reinitialize a missing journal on the restart path.',
+  check_current_authority: 'Keep the same operation ID and arguments. A call must pass fresh authority checks before execution; this local status is not permission to execute.',
+  stop: 'This operation is denied, expired or cancelled. Stop and consult the policy owner. Changing its ID is not a way to bypass that decision.',
+  inspect_configuration: 'Check the supported runtime, input, mapping and connection configuration. Keep any existing operation ID and journal; do not automatically repeat a possibly sent call.',
+});
+
+function recoveryGuidance(code, state) {
+  let nextStep;
+  if (code === 'ALREADY_COMPLETED' || (state === 'completed' && code !== 'BINDING_MISMATCH')) nextStep = 'read_business_result';
+  else if (['OUTCOME_UNKNOWN', 'UNCERTAIN', 'BINDING_MISMATCH', 'CONFLICT'].includes(code)) nextStep = 'reconcile_without_resend';
+  else if (code?.startsWith('JOURNAL_')) nextStep = 'repair_journal';
+  else if (code === 'CURRENT_AUTHORITY_UNAVAILABLE') nextStep = 'restore_connection';
+  else if (['POLICY_DENIED', 'APPROVAL_EXPIRED', 'CANCELLED'].includes(code)
+    || ['denied', 'expired', 'cancelled'].includes(state)) nextStep = 'stop';
+  else if (code === 'AWAITING_APPROVAL' || (!code && state === 'held')) nextStep = 'review_same_operation';
+  else if (['requesting', 'redeeming', 'dispatching', 'uncertain', 'uncertain_request', 'uncertain_redemption'].includes(state)) nextStep = 'reconcile_without_resend';
+  else if (!code && state === 'prepared') nextStep = 'check_current_authority';
+  else nextStep = 'inspect_configuration';
+  return Object.freeze({ nextStep, preserveOperationId: true, message: recoveryMessages[nextStep] });
+}
+
 export class GovernedToolError extends Error {
   constructor(code, status = null) {
-    super(`OSuite ${code}: no automatic repeat of this operation.`);
+    const recovery = recoveryGuidance(code, status?.state);
+    super(`OSuite ${code}: ${recovery.message}`);
     this.name = 'GovernedToolError';
     this.code = code;
-    this.status = status;
+    this.status = status === null ? null : Object.freeze({ ...status, recovery });
     this.retryAutomatically = false;
+    this.recovery = recovery;
   }
 }
 export function reject(code, status) { throw new GovernedToolError(code, status); }
@@ -131,12 +159,12 @@ export function matchesStoredAction(payload, record, config) {
   } catch { return false; }
 }
 
-export function publicStatus(record, baseUrl) {
+export function publicStatus(record, baseUrl, failureCode = null) {
   if (!record) return null;
   return Object.freeze({ operationId: record.operationId, actionId: record.actionId, state: record.state,
     resultDigest: record.resultDigest || null, reportState: record.reportState,
     reviewUrl: `${baseUrl}/approvals?action=${encodeURIComponent(record.actionId)}`,
     replayUrl: `${baseUrl}/replay/${encodeURIComponent(record.actionId)}`,
     admissionPath: ADMISSION_PATH, coverage: COVERAGE, retryAutomatically: false,
-    resultRetained: false });
+    resultRetained: false, recovery: recoveryGuidance(failureCode, record.state) });
 }

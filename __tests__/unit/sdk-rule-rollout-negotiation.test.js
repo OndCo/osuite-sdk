@@ -13,7 +13,8 @@ const scope = { org_id: 'org-negotiation', runtime_id: config.runtimeId, agent_i
   provider: config.runtimeId, connection_id: 'connection-negotiation' };
 function negotiationFixture(now = Date.now()) {
   const state = new Map();
-  const store = { read: key => state.get(key), update: (key, update) => { const value = update(state.get(key)); state.set(key, value); return value; } };
+  const store = { read: key => state.get(key), write: (key, value) => state.set(key, structuredClone(value)),
+    update: (key, update) => { const value = update(state.get(key)); state.set(key, value); return value; } };
   const acknowledgement = { schema_version: 'osuite.rule_rollout_client.v1', capability, scope,
     device_binding: { credential_id: 'key-negotiation', connection_generation: 1, capability,
       enrollment_runtime: 'codex', public_key_fingerprint: 'a'.repeat(64) },
@@ -122,6 +123,18 @@ describe('explicit SDK scoped rollout client negotiation', () => {
     else if (kind === 'unknown expiry') f.acknowledgement.expires_at = 'unknown';
     else f.acknowledgement.device_binding.credential_id = 'another-key';
     expect(await resolveRemotePosture(config, f)).toMatchObject({ available: false, blocked: true });
-    expect(f.state.has('posture')).toBe(false);
+    expect(f.state.get('posture')).toMatchObject({ document: null, rejected: true });
+    expect(f.state.get('posture-rejection')).toMatchObject({ schema: 'osuite.posture-rejection.v1' });
+  });
+
+  it('capability PUT rejection fences a previously cached configuration across subsequent calls', async () => {
+    const f = negotiationFixture();
+    expect(await resolveRemotePosture(config, f)).toMatchObject({ available: true });
+    expect(await resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) } }))
+      .toMatchObject({ available: false, blocked: true });
+    expect(await resolveRemotePosture({ ...config, ruleRolloutCapability: undefined }, {
+      ...f, api: { request: async () => ({ ok: false, status: 0, error: 'timeout' }) },
+    })).toMatchObject({ available: false, blocked: true });
+    expect(await resolveRemotePosture(config, f)).toMatchObject({ available: true, source: 'remote' });
   });
 });

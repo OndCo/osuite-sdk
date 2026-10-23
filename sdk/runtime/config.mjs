@@ -42,7 +42,7 @@ export function loadRuntimeConfig({ installDir, env = process.env, host = 'claud
     baseUrl: get('BASE_URL').replace(/\/+$/, ''), apiKey: get('API_KEY'),
     privateKeyBase64: get('PRIVATE_KEY_BASE64').trim(),
     signatureMode: get('SIGNATURE_MODE', hardened ? 'required' : 'workspace_key_optional'),
-    mode, guardFailureMode: mode === 'strict' ? 'block' : (get('GUARD_FAILURE_MODE', hardened ? 'block' : 'allow') === 'allow' ? 'allow' : 'block'),
+    mode, guardFailureMode: mode === 'strict' ? 'block' : (get('GUARD_FAILURE_MODE', 'block') === 'allow' ? 'allow' : 'block'),
     requireAssumptionCapture: get('REQUIRE_ASSUMPTION_CAPTURE') === 'true',
     approvalTimeoutSeconds: number('APPROVAL_TIMEOUT_SECONDS', 300, 1, 3600),
     approvalWaitMs: number('APPROVAL_WAIT_SECONDS', 30, 0, 40) * 1000,

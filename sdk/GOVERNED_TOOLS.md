@@ -1,7 +1,7 @@
 # Native Tool Compatibility And Recovery
 
 This opt-in API is introduced in 2.11.0; it is not part of 2.10.2. Confirm the
-chosen version with `npm view osuite@2.11.0 version` before installing. A source
+chosen version with `npm view osuite@2.11.1 version` before installing. A source
 checkout alone does not establish npm availability or server compatibility;
 consult the verified release record before enabling it for a workspace.
 
@@ -144,6 +144,14 @@ creates a different scope: never use that as a recovery shortcut.
 | `CURRENT_AUTHORITY_UNAVAILABLE` | Restore current server/identity configuration; never fall back to ungoverned execution. |
 | `JOURNAL_MISSING` / invalid journal | Restore the correct durable journal; do not initialize an empty replacement to replay old IDs. |
 | `ABORTED` | The local waiter stopped. This does not revoke approval or undo a dispatched effect. |
+
+Since 2.11.1, `error.recovery` and `status.recovery` expose a bounded `nextStep`,
+`preserveOperationId: true`, and an explanatory `message` for the UI. They contain
+no native arguments or result payloads. Show them alongside the stable error
+code; do not treat them as a grant, a promise of resumability, or an automatic
+retry instruction. `retryAutomatically` remains false on errors. After an
+unknown dispatch, `reconcile_without_resend` means inspect the resource, not
+call the wrapper with a new ID.
 
 Restart can resume a held review. It cannot infer that a request was not sent
 from a timeout, missing response, crashed process, or lost completion report.

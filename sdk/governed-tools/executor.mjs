@@ -177,7 +177,12 @@ export function createGovernedTools({ config: rawConfig, namespace, journalPath,
       const record = local(operationId);
       if (!record) return null;
       const observed = await authority.read(record);
-      return Object.freeze({ ...status(record), remote: Object.freeze({ available: observed.available,
+      let failureCode = observed.mismatch ? 'BINDING_MISMATCH' : observed.available ? null : 'CURRENT_AUTHORITY_UNAVAILABLE';
+      // Refine held-call guidance without changing durable execution state.
+      if (!failureCode && record.state === 'held'
+          && (['blocked', 'denied', 'expired', 'cancelled'].includes(observed.action.status)
+            || ['denied', 'expired', 'cancelled'].includes(observed.body?.approval?.state))) failureCode = 'POLICY_DENIED';
+      return Object.freeze({ ...publicStatus(record, config.baseUrl, failureCode), remote: Object.freeze({ available: observed.available,
         status: observed.available ? observed.action.status : null, bindingMismatch: observed.mismatch === true }) });
     },
     close() { if (!closed) { closed = true; if (inFlight === 0) journal.close(); } },

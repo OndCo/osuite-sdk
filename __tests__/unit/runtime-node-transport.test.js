@@ -34,6 +34,31 @@ const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const privateKeyBase64 = Buffer.from(pair.privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64');
 
 describe('dependency-free Node runtime transport', () => {
+  it.each(['bad\nkey', 'bad\u0000key', '\u4e2d\u6587', 123])('invalid API-key configuration is never transport availability: %j', async apiKey => {
+    const { createApiClient, isTransientFailure } = await runtime();
+    const server = await stub((_req, res) => res.end('{}'));
+    const result = await createApiClient({ ...server, apiKey }).request('POST', '/api/guard', {});
+    expect(result).toMatchObject({ ok: false, error: 'invalid_request' });
+    expect(isTransientFailure(result)).toBe(false);
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it.each(['CERT_HAS_EXPIRED', 'ENOTFOUND', 'ERR_INVALID_ARG_VALUE', undefined])('does not label permanent or unknown fetch errors transient: %s', async code => {
+    const { createApiClient, isTransientFailure } = await runtime();
+    const result = await createApiClient({ baseUrl: 'https://fixture.invalid', apiKey: 'test' }, {
+      fetchImpl: async () => { throw new TypeError('fixture fetch error', { cause: Object.assign(new Error('fixture'), { code }) }); },
+    }).request('GET', '/api/guard');
+    expect(result.ok).toBe(false);
+    expect(isTransientFailure(result)).toBe(false);
+  });
+
+  it.each(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT'])('keeps classified transient fetch failure %s available only as an explicit gap', async code => {
+    const { createApiClient, isTransientFailure } = await runtime();
+    const result = await createApiClient({ baseUrl: 'https://fixture.invalid', apiKey: 'test' }, {
+      fetchImpl: async () => { throw new TypeError('fixture fetch error', { cause: Object.assign(new Error('fixture'), { code }) }); },
+    }).request('GET', '/api/guard');
+    expect(isTransientFailure(result)).toBe(true);
+  });
   it('signs the exact canonical request with Node crypto, without mutating its input', async () => {
     const { canonicalJson, createApiClient } = await runtime();
     const server = await stub((_req, res) => res.end('{"decision":"allow"}'));
@@ -106,12 +131,37 @@ describe('dependency-free Node runtime transport', () => {
       .toMatchObject({ ok: false, error: 'invalid_response' });
   });
 
+  it('rejects malformed UTF-8 rather than silently repairing a response, then accepts the next valid response', async () => {
+    const { createApiClient } = await runtime();
+    let malformed = true;
+    const server = await stub((_req, res) => res.end(malformed
+      ? Buffer.concat([Buffer.from('{"decision":"allow","evidence":"'), Buffer.from([0xff]), Buffer.from('"}')])
+      : '{"decision":"block"}'));
+    const api = createApiClient({ ...server, apiKey: 'test-key' });
+    expect(await api.request('POST', '/api/guard', {})).toMatchObject({ ok: false, error: 'invalid_response' });
+    malformed = false;
+    expect(await api.request('POST', '/api/guard', {})).toMatchObject({ ok: true, body: { decision: 'block' } });
+    expect(server.requests).toHaveLength(2);
+  });
+
   it('rejects remote cleartext and credential-bearing base URLs before networking', async () => {
     const { createApiClient } = await runtime();
     for (const baseUrl of ['http://customer.example', 'https://user:password@example.com', 'https://example.com/?key=x']) {
       const api = createApiClient({ baseUrl, apiKey: 'test-key' });
       expect(await api.request('POST', '/api/guard', {})).toMatchObject({ ok: false, error: 'invalid_base_url' });
     }
+  });
+
+  it.each([
+    { code: 'ECONNREFUSED', errors: [{ code: 'ECONNREFUSED' }, { code: 'EACCES' }] },
+    { code: 'EACCES', errors: [{ code: 'ECONNREFUSED' }] },
+    { code: 'ECONNRESET', errors: [] },
+  ])('does not hide a permanent or unknown aggregate member behind a transient parent code: %j', async cause => {
+    const { createApiClient } = await runtime();
+    const api = createApiClient({ baseUrl: 'https://workspace.example', apiKey: 'test-key' }, {
+      fetchImpl: async () => { throw new TypeError('fetch failed', { cause }); },
+    });
+    expect(await api.request('POST', '/api/guard', {})).toMatchObject({ ok: false, error: 'request_failed' });
   });
 });
 

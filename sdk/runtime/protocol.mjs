@@ -6,6 +6,21 @@ export const isObject = value => value !== null && typeof value === 'object' && 
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}$/.test(value) && !value.includes('..');
 
+export const isTransientFailure = response => response?.ok === false && (
+  (response.status === 0 && ['timeout', 'transport_failure'].includes(response.error))
+  || (response.error === 'http_error' && [500, 502, 503, 504].includes(response.status))
+);
+
+const transientCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT',
+  'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET']);
+function transientTransport(error) {
+  const cause = error?.cause || error;
+  if (cause?.errors !== undefined) return Array.isArray(cause.errors) && cause.errors.length > 0
+    && cause.errors.length <= 32 && (cause.code === undefined || transientCodes.has(cause.code))
+    && cause.errors.every(item => transientCodes.has(item?.code) && item.errors === undefined);
+  return transientCodes.has(cause?.code);
+}
+
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (isObject(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
@@ -33,6 +48,10 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
       const baseUrl = validatedBaseUrl(config.baseUrl, config);
       if (!baseUrl) return { ok: false, status: 0, error: 'invalid_base_url' };
       if (!config.apiKey) return { ok: false, status: 0, error: 'not_configured' };
+      if (typeof config.apiKey !== 'string' || !/^[\x21-\x7e]+$/.test(config.apiKey)
+          || !['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(method)) {
+        return { ok: false, status: 0, error: 'invalid_request' };
+      }
       if (typeof endpoint !== 'string' || !endpoint.startsWith('/') || endpoint.startsWith('//')) {
         return { ok: false, status: 0, error: 'invalid_endpoint' };
       }
@@ -88,13 +107,14 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
           chunks.push(Buffer.from(value));
         }
         let parsed;
-        try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch {
+        try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); } catch {
           return { ok: false, status, error: 'invalid_response' };
         }
         if (!isObject(parsed)) return { ok: false, status, error: 'invalid_response' };
         return { ok: true, status, body: parsed };
-      } catch {
-        return { ok: false, status, error: controller.signal.aborted ? 'timeout' : 'transport_failure' };
+      } catch (error) {
+        return { ok: false, status, error: status ? 'invalid_response' : controller.signal.aborted ? 'timeout'
+          : transientTransport(error) ? 'transport_failure' : 'request_failed' };
       } finally { clearTimeout(timer); }
     },
   };

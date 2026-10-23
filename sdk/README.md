@@ -1,4 +1,4 @@
-# OSuite SDK (v2.11.0)
+# OSuite SDK (v2.11.1)
 
 **Governed action SDK for AI agents.**
 
@@ -6,7 +6,7 @@ The OSuite SDK helps teams route approvals, record governed decisions, and produ
 
 The opt-in Node 24 `osuite/governed-tools` entry preserves native tool calls
 and adds durable approval recovery. See [Native Tool Compatibility](GOVERNED_TOOLS.md).
-It is not in the published 2.10.2 package and does not enable Hook or a gateway.
+It was introduced in 2.11.0 and does not enable Hook or a gateway.
 
 ## Installation
 
@@ -25,8 +25,8 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-For this version, use `npx osuite@2.11.0 connect` after confirming availability
-with `npm view osuite@2.11.0 version`. A source checkout or this document alone
+For this version, use `npx osuite@2.11.1 connect` after confirming availability
+with `npm view osuite@2.11.1 version`. A source checkout or this document alone
 does not establish registry publication, and npm's `latest` may differ from the
 checked-out version. The stable credential-recovery behavior and the new
 native-call operation journal are different mechanisms.
@@ -44,7 +44,7 @@ credential paths are refused. The client durably saves a recovery journal before
 acknowledging a replacement, so reconnect does not revoke the old key before the
 new credential can be recovered. Historical exposure still requires key rotation.
 
-New 2.10.1 hook installations need Node.js 18 or newer and Git for repository
+Since 2.10.1, new hook installations need Node.js 18 or newer and Git for repository
 safety checks. Python is not required for the packaged Node hooks or MCP bridge.
 Existing Python installations remain legacy until explicitly migrated. Custom
 registrations and intentionally disabled hooks are preserved, not silently
@@ -62,6 +62,40 @@ use a supported Node LTS release, preferably Node 24, for new installations.
 acknowledgement only after an eligible human approves and the server freshly
 redeems that exact grant. A missing, denied or unconfirmed grant does not execute.
 Slack and email notifications require configured workspace channels.
+
+## Failure Handling In 2.11.1
+
+The Hook's local guard-failure default is now `block`, including non-strict
+profiles. Invalid or oversized input, malformed responses, signing failures,
+redirects and request/authentication rejections are not availability fallbacks.
+An explicit non-strict `GUARD_FAILURE_MODE=allow` (or a verified administrator
+posture) can permit an **ungoverned** action only for a classified transport
+failure or HTTP 500/502/503/504. Strict and scoped mandatory profiles never use
+that fallback. An outage allowance is not an approval or an admission receipt.
+
+Current posture rejection is retained in the local authenticated cache. A late
+response that started before the rejection cannot clear it; a fresh valid
+server response is required. An independent rejection marker survives contention
+on the configuration cache lock. Authentication/revocation/conflict errors in
+guard, admission and approval reads also invalidate cached posture. Preserve the private state directory: deleting
+or restoring old state is not a supported recovery path.
+
+The native-tool wrapper has no offline fallback. Its errors and status now
+include `recovery.nextStep` and `recovery.message`. These are presentation hints,
+not authority to execute or resend. Keep the same operation ID after a held
+review, and reconcile uncertain outcomes with the resource without replaying
+the write. Successful native results remain unchanged.
+
+A Hook returning an explicit refusal and a host losing the Hook process are
+different cases. A host may continue after a callback crash, unsupported output
+or host-enforced timeout. This patch hardens OSuite's handled error paths; it
+does not change vendor host behavior or make endpoint Hooks unbypassable. Use
+mandatory resource-side enforcement where that guarantee is required.
+
+New Claude Code pre-tool registrations include `onFailure: block`, supported
+by Claude Code 2.1.295 and later and tested on 2.1.300. Existing custom or disabled
+registrations are preserved; `doctor` warns when the failure policy is absent.
+That setting is not a guarantee for older Claude versions or other hosts.
 
 ## The Governance Loop
 

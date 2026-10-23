@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { createApiClient, isObject, safeId } from './protocol.mjs';
 import { createStateStore } from './state.mjs';
 import { loadRuntimeConfig } from './config.mjs';
-import { resolveRemotePosture } from './posture.mjs';
+import { captureRejectionFence, invalidatePostureCache, rejectionFenceUnchanged, resolveRemotePosture } from './posture.mjs';
 import { buildActionContext, deriveSessionId } from './context.mjs';
 import { admitAction, cavaFingerprint, matchesAction } from './admission.mjs';
 import { recordOutcome } from './outcome.mjs';
 import { validateGitPublication } from './git.mjs';
 
 const note = message => ({ exitCode: 0, stdout: message ? { systemMessage: `[OSuite] ${message}` } : {}, stderr: '' });
+const accessChanged = 'Runtime access changed during this request. No execution is authorized. Do not retry automatically; reconcile in Studio.';
 export function deny(message) {
   const reason = `[OSuite] ${message}`;
   return { exitCode: 2, stderr: reason, stdout: { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } } };
@@ -18,6 +19,15 @@ export function applyPosture(config, posture) {
   return { ...config, mode: posture.mode, guardFailureMode: posture.mode === 'strict' ? 'block' : posture.on_guard_unavailable,
     signatureMode: posture.require_signature ? 'required' : 'workspace_key_optional',
     requireAssumptionCapture: posture.require_assumption_capture, approvalTimeoutSeconds: posture.approval_timeout_seconds };
+}
+
+export function trackPostureRejections(api, config, store, now = Date.now) {
+  return { request: async (...args) => {
+    const response = await api.request(...args);
+    // These requests use the same credential, including observational reads and outcome telemetry.
+    if ([401, 403, 409].includes(response.status)) invalidatePostureCache(config, store, now());
+    return response;
+  } };
 }
 
 export async function emitRuntimeEvent(api, config, context, eventType, actionId = null, payload = {}) {
@@ -73,16 +83,18 @@ function updatePending(store, context, entry = null) {
   else store.remove(key);
 }
 
-async function stopHook(data, config, api, store) {
+async function stopHook(data, config, api, store, fenceUnchanged) {
   const session = deriveSessionId(data, config), key = `pending:${session}`;
   const saved = store.read(key);
   if (!Array.isArray(saved) || !saved.length) return note();
   const retained = [], decided = [];
   const deadline = performance.now() + 3000;
   for (const entry of saved) {
+    if (!fenceUnchanged()) return note(accessChanged);
     if (!safeId(entry.action_id)) continue;
     if (performance.now() >= deadline) { retained.push(entry); continue; }
     const response = await api.request('GET', `/api/actions/${encodeURIComponent(entry.action_id)}`, undefined, { timeoutMs: Math.max(1, deadline - performance.now()) });
+    if ([401, 403, 409].includes(response.status) || !fenceUnchanged()) return note(accessChanged);
     if (!response.ok) { retained.push(entry); continue; }
     const action = response.body?.action || response.body;
     if (!matchesAction(response.body, entry, { actionId: entry.action_id, fingerprint: entry.fingerprint })) {
@@ -95,7 +107,9 @@ async function stopHook(data, config, api, store) {
       decided.push('A held action has an uncertain execution outcome. Do not retry automatically; reconcile its action/replay in Studio.');
     } else decided.push('A held action was denied, expired, or closed. Do not retry automatically; tell the user.');
   }
+  if (!fenceUnchanged()) return note(accessChanged);
   if (retained.length) store.write(key, retained); else store.remove(key);
+  if (!fenceUnchanged()) { store.write(key, saved); return note(accessChanged); }
   if (decided.length && !data.stop_hook_active) return { exitCode: 0, stderr: '', stdout: { decision: 'block', reason: `[OSuite] ${decided.join(' ')}` } };
   return note(decided.join(' ') || 'An action is still held for human review. No tool was executed by this hook.');
 }
@@ -112,33 +126,43 @@ export async function runHook(data, localConfig, dependencies = {}) {
     const apiFactory = dependencies.apiFactory || createApiClient;
     let api = dependencies.api || apiFactory(localConfig);
     if (event === 'PostToolUse' || event === 'PostToolUseFailure') {
-      const result = await recordOutcome(localConfig, data, { api, store, now });
-      return note(result.reason ? 'Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect.' : '');
+      const fence = captureRejectionFence(localConfig, store);
+      const result = await recordOutcome(localConfig, data, { api: trackPostureRejections(api, localConfig, store, now), store, now });
+      return note(result.reason ? 'Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect.'
+        : rejectionFenceUnchanged(localConfig, store, fence) === true ? '' : accessChanged);
     }
     const remote = await resolveRemotePosture(localConfig, { api, store, now: now() });
+    const fence = remote.rejectionFence;
+    const fenceUnchanged = () => rejectionFenceUnchanged(localConfig, store, fence) === true;
+    const checkedNote = message => fenceUnchanged() ? note(message) : pre ? deny(accessChanged) : note(accessChanged);
     const config = { ...applyPosture(localConfig, remote.posture), ruleRollout: remote.ruleRollout,
       orgId: remote.orgId || localConfig.orgId };
-    api = dependencies.api || apiFactory(config);
-    if (event === 'Stop') return stopHook(data, config, api, store);
+    api = trackPostureRejections(dependencies.api || apiFactory(config), localConfig, store, now);
+    if (event === 'Stop') {
+      const stopped = await stopHook(data, config, api, store, fenceUnchanged);
+      return fenceUnchanged() ? stopped : note(accessChanged);
+    }
     if (remote.blocked) return pre ? deny('Verified runtime posture is unavailable or expired. Execution is blocked; reconnect or restore access.')
       : note('Verified runtime posture is unavailable. Enforce hooks will block execution until it can be verified.');
     if (!pre && event !== 'SessionStart' && event !== 'SessionEnd') return note('Unsupported hook event; no execution decision was made.');
     const session = await openSession(api, config, data, store, now());
+    if (!fenceUnchanged()) return pre ? deny(accessChanged) : note(accessChanged);
     if (!pre) {
       await emitRuntimeEvent(api, config, { runtime_session_id: session }, event === 'SessionStart' ? 'session_started' : 'session_ended');
-      return note(remote.available ? '' : 'Observe mode is active without verified remote posture. This is not governance authorization.');
+      return checkedNote(remote.available ? '' : 'Observe mode is active without verified remote posture. This is not governance authorization.');
     }
     const context = { ...initialContext, tool_name: data.tool_name };
     if (!remote.available) {
       rememberGap(store, 'posture_unavailable', now());
-      return note('Not governed: remote posture is unavailable; explicit observe mode does not enforce OSuite policy.');
+      return checkedNote('Not governed: remote posture is unavailable; explicit observe mode does not enforce OSuite policy.');
     }
     await emitRuntimeEvent(api, config, context, 'tool_preflight', null, { tool_input_digest: context.tool_input_digest, install_check: config.installCheck === true });
+    if (!fenceUnchanged()) return deny(accessChanged);
     const result = await admitAction(context, { api, config, ...dependencies.admission, beforeRelease: response => validateGitPublication(context, response) });
     if (result.degraded) {
       rememberGap(store, result.reason, now());
       await emitRuntimeEvent(api, config, context, 'governance_unavailable', null, { decision: result.decision === 'allow' ? 'guard_unavailable' : 'guard_unavailable_blocked' });
-      return result.decision === 'allow' ? note('Not governed: the guard is unavailable and this verified posture explicitly allows availability fallback. No authorization or completion is claimed.')
+      return result.decision === 'allow' ? checkedNote('Not governed: the guard is unavailable and this verified posture explicitly allows availability fallback. No authorization or completion is claimed.')
         : deny('Guard unavailable. Verified policy requires blocking this call.');
     }
     await flushGap(api, config, context, store);
@@ -154,17 +178,17 @@ export async function runHook(data, localConfig, dependencies = {}) {
       } catch { return deny('Cannot persist the exact-action receipt state. The admitted tool was not released; reconcile its action in Studio before retrying.'); }
       updatePending(store, context);
       await emitRuntimeEvent(api, config, context, 'tool_allowed', result.actionId, { decision: result.decision, install_check: config.installCheck === true });
-      return note(config.mode === 'observe' && !result.ruleRolloutBinding ? 'Observe mode recorded a policy result; it does not enforce OSuite policy.' : result.decision === 'warn' ? 'OSuite authorized this call with a policy warning.' : '');
+      return checkedNote(config.mode === 'observe' && !result.ruleRolloutBinding ? 'Observe mode recorded a policy result; it does not enforce OSuite policy.' : result.decision === 'warn' ? 'OSuite authorized this call with a policy warning.' : '');
     }
     if (result.decision === 'require_approval') {
       if (result.observeOnly !== true) updatePending(store, context, { action_id: result.actionId, agent_id: config.agentId,
         runtime_session_id: session, tool_input_digest: context.tool_input_digest, fingerprint: cavaFingerprint(result.response) });
       await emitRuntimeEvent(api, config, context, 'tool_requires_approval', result.actionId, { decision: result.observeOnly === true ? 'observe_would_require_approval' : result.response?.decision?.decision || 'require_approval' });
-      return result.observeOnly === true ? note('Observe mode: this call would require human approval; it is not authorized by a reviewer.')
+      return result.observeOnly === true ? checkedNote('Observe mode: this call would require human approval; it is not authorized by a reviewer.')
         : deny(`Human approval is still required for action ${result.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
     }
     await emitRuntimeEvent(api, config, context, 'tool_blocked', result.actionId, { decision: result.observeOnly === true ? 'observe_would_block' : 'block', reason: result.reason });
-    return result.observeOnly === true ? note('Observe mode: OSuite policy would block this call. It is not authorized by OSuite.')
+    return result.observeOnly === true ? checkedNote('Observe mode: OSuite policy would block this call. It is not authorized by OSuite.')
       : deny(`OSuite policy did not authorize this exact action (${result.reason}). Do not retry automatically.`);
   } catch {
     return pre ? deny('Hook evidence or state is invalid. Execution is blocked; no successful admission is claimed.')

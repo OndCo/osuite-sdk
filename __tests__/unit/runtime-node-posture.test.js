@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -66,7 +66,7 @@ describe('scoped remote posture configuration', () => {
     const f = await fixture();
     const result = await f.resolveRemotePosture(config, { ...f, api: f.respond(document(overrides)), now });
     expect(result).toMatchObject({ available: false, blocked: true });
-    expect(f.store.read('posture')).toBeNull();
+    expect(f.store.read('posture')).toMatchObject({ document: null, rejected: true, generation: 1 });
   });
 
   it('uses a bounded fresh cache offline, then blocks without downgrading strict mode', async () => {
@@ -95,6 +95,151 @@ describe('scoped remote posture configuration', () => {
     f.store.write('posture', cached);
     expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now }))
       .toMatchObject({ available: false, blocked: true, posture: { mode: 'enforce' } });
+  });
+
+  it.each([400, 403, 413, 422, 429])('HTTP %s invalidates fresh cache eligibility across the following offline request', async status => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    expect(await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status, error: 'http_error' }) }, now: now + 1000 }))
+      .toMatchObject({ available: false, blocked: true });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true, posture: { mode: 'strict' } });
+    const restored = document({ issued_at: new Date(now + 3000).toISOString() });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.respond(restored), now: now + 3000 }))
+      .toMatchObject({ available: true, source: 'remote' });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 4000 }))
+      .toMatchObject({ available: true, source: 'cache' });
+  });
+
+  it('does not mask a malformed current document with an older fresh cache', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.respond({}), now: now + 1000 }))
+      .toMatchObject({ available: false, blocked: true });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true });
+  });
+
+  it('a response started before a rejection cannot clear its persistent fence', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    let release, started;
+    const ready = new Promise(resolve => { started = resolve; });
+    const paused = new Promise(resolve => { release = resolve; });
+    const old = f.resolveRemotePosture(config, { ...f, api: { async request() {
+      started(); await paused; return { ok: true, status: 200, body: document() };
+    } }, now: now + 1000 });
+    await ready;
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 });
+    release();
+    expect(await old).toMatchObject({ available: false, blocked: true });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true });
+  });
+
+  it('retains rejection across restart even when the configuration cache is locked', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    const lock = `${f.store.path('posture')}.lock`;
+    mkdirSync(lock);
+    expect(await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 }))
+      .toMatchObject({ available: false, blocked: true });
+    rmSync(lock, { recursive: true });
+    const store = createStateStore({ ...config, stateDir: path.dirname(f.store.path('posture')) });
+    expect(await f.resolveRemotePosture(config, { ...f, store, api: f.offline, now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true });
+    expect(await f.resolveRemotePosture(config, { ...f, store, api: f.respond(document({ issued_at: new Date(now + 3000).toISOString() })), now: now + 3000 }))
+      .toMatchObject({ available: true, source: 'remote' });
+    expect(await f.resolveRemotePosture(config, { ...f, store, api: f.offline, now: now + 4000 }))
+      .toMatchObject({ available: true, source: 'cache' });
+  });
+
+  it('a pre-rejection response cannot clear a fence written during cache contention', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    let release, started;
+    const ready = new Promise(resolve => { started = resolve; });
+    const paused = new Promise(resolve => { release = resolve; });
+    const old = f.resolveRemotePosture(config, { ...f, api: { async request() {
+      started(); await paused; return { ok: true, status: 200, body: document() };
+    } }, now: now + 1000 });
+    await ready;
+    const lock = `${f.store.path('posture')}.lock`; mkdirSync(lock);
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 403, error: 'http_error' }) }, now: now + 1000 });
+    rmSync(lock, { recursive: true }); release();
+    expect(await old).toMatchObject({ available: false, blocked: true });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true });
+  });
+
+  it('rejects tampered rejection metadata without making an authority request', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 });
+    const marker = f.store.read('posture-rejection');
+    f.store.write('posture-rejection', { ...marker, id: 'changed-marker' });
+    const count = f.calls.length;
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now: now + 2000 }))
+      .toMatchObject({ available: false, blocked: true });
+    expect(f.calls).toHaveLength(count);
+  });
+
+  it('does not reuse a recovered cache if its bound rejection marker disappears', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 });
+    const fresh = document({ issued_at: new Date(now + 2000).toISOString() });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.respond(fresh), now: now + 2000 }))
+      .toMatchObject({ available: true, source: 'remote' });
+    f.store.remove('posture-rejection');
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.offline, now: now + 3000 }))
+      .toMatchObject({ available: false, blocked: true });
+  });
+
+  it('does not contact authority when rejection storage is already read-only', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    const directory = path.dirname(f.store.path('posture'));
+    let requests = 0;
+    chmodSync(directory, 0o500);
+    try {
+      expect(await f.resolveRemotePosture(config, { ...f, api: { request: async () => {
+        requests++; return { ok: false, status: 401, error: 'http_error' };
+      } }, now: now + 1000 })).toMatchObject({ available: false, blocked: true });
+      expect(requests).toBe(0);
+    } finally { chmodSync(directory, 0o700); }
+  });
+
+  it('a captured rejection fence detects concurrent rejection even after a later recovery', async () => {
+    const f = await fixture();
+    const { captureRejectionFence, rejectionFenceUnchanged } = await import('../../sdk/runtime/posture.mjs');
+    expect(typeof captureRejectionFence).toBe('function');
+    expect(typeof rejectionFenceUnchanged).toBe('function');
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    const before = captureRejectionFence(config, f.store);
+    expect(rejectionFenceUnchanged(config, f.store, before)).toBe(true);
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 });
+    expect(rejectionFenceUnchanged(config, f.store, before)).toBe(false);
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document({ issued_at: new Date(now + 2000).toISOString() })), now: now + 2000 });
+    expect(rejectionFenceUnchanged(config, f.store, before)).toBe(false);
+    expect(rejectionFenceUnchanged(config, f.store, captureRejectionFence(config, f.store))).toBe(true);
+  });
+
+  it('cannot relabel an old response as restored even when a new request restores identical configuration', async () => {
+    const f = await fixture();
+    await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now });
+    let release, started;
+    const ready = new Promise(resolve => { started = resolve; });
+    const paused = new Promise(resolve => { release = resolve; });
+    const old = f.resolveRemotePosture(config, { ...f, api: { async request() {
+      started(); await paused; return { ok: true, status: 200, body: document() };
+    } }, now: now + 1000 });
+    await ready;
+    await f.resolveRemotePosture(config, { ...f, api: { request: async () => ({ ok: false, status: 401, error: 'http_error' }) }, now: now + 1000 });
+    expect(await f.resolveRemotePosture(config, { ...f, api: f.respond(document()), now: now + 2000 }))
+      .toMatchObject({ available: true, source: 'remote' });
+    release();
+    expect(await old).toMatchObject({ available: false, blocked: true });
   });
 
   it('permits a fresh administrator downgrade but not an older response racing it', async () => {

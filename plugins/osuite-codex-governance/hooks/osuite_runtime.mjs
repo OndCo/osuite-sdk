@@ -1,7 +1,7 @@
 // Generated from sdk/runtime by hooks/build-node-runtime.mjs. Do not edit this distribution file.
 
 // sdk/runtime/hook.mjs
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 
 // sdk/runtime/protocol.mjs
 import { createHash, createPrivateKey, sign } from "node:crypto";
@@ -9,6 +9,24 @@ var RULE_ROLLOUT_CAPABILITY = "osuite.scoped_rule_rollout.v1";
 var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var sha256 = (value) => createHash("sha256").update(value).digest("hex");
 var safeId = (value) => typeof value === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}$/.test(value) && !value.includes("..");
+var isTransientFailure = (response) => response?.ok === false && (response.status === 0 && ["timeout", "transport_failure"].includes(response.error) || response.error === "http_error" && [500, 502, 503, 504].includes(response.status));
+var transientCodes = /* @__PURE__ */ new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET"
+]);
+function transientTransport(error) {
+  const cause = error?.cause || error;
+  if (cause?.errors !== void 0) return Array.isArray(cause.errors) && cause.errors.length > 0 && cause.errors.length <= 32 && (cause.code === void 0 || transientCodes.has(cause.code)) && cause.errors.every((item) => transientCodes.has(item?.code) && item.errors === void 0);
+  return transientCodes.has(cause?.code);
+}
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (isObject(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
@@ -38,6 +56,9 @@ function createApiClient(config, {
       const baseUrl = validatedBaseUrl(config.baseUrl, config);
       if (!baseUrl) return { ok: false, status: 0, error: "invalid_base_url" };
       if (!config.apiKey) return { ok: false, status: 0, error: "not_configured" };
+      if (typeof config.apiKey !== "string" || !/^[\x21-\x7e]+$/.test(config.apiKey) || !["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(method)) {
+        return { ok: false, status: 0, error: "invalid_request" };
+      }
       if (typeof endpoint !== "string" || !endpoint.startsWith("/") || endpoint.startsWith("//")) {
         return { ok: false, status: 0, error: "invalid_endpoint" };
       }
@@ -99,14 +120,14 @@ function createApiClient(config, {
         }
         let parsed;
         try {
-          parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
         } catch {
           return { ok: false, status, error: "invalid_response" };
         }
         if (!isObject(parsed)) return { ok: false, status, error: "invalid_response" };
         return { ok: true, status, body: parsed };
-      } catch {
-        return { ok: false, status, error: controller.signal.aborted ? "timeout" : "transport_failure" };
+      } catch (error) {
+        return { ok: false, status, error: status ? "invalid_response" : controller.signal.aborted ? "timeout" : transientTransport(error) ? "transport_failure" : "request_failed" };
       } finally {
         clearTimeout(timer);
       }
@@ -256,7 +277,7 @@ function loadRuntimeConfig({ installDir, env = process.env, host = "claude", run
     privateKeyBase64: get("PRIVATE_KEY_BASE64").trim(),
     signatureMode: get("SIGNATURE_MODE", hardened ? "required" : "workspace_key_optional"),
     mode,
-    guardFailureMode: mode === "strict" ? "block" : get("GUARD_FAILURE_MODE", hardened ? "block" : "allow") === "allow" ? "allow" : "block",
+    guardFailureMode: mode === "strict" ? "block" : get("GUARD_FAILURE_MODE", "block") === "allow" ? "allow" : "block",
     requireAssumptionCapture: get("REQUIRE_ASSUMPTION_CAPTURE") === "true",
     approvalTimeoutSeconds: number("APPROVAL_TIMEOUT_SECONDS", 300, 1, 3600),
     approvalWaitMs: number("APPROVAL_WAIT_SECONDS", 30, 0, 40) * 1e3,
@@ -274,7 +295,7 @@ function loadRuntimeConfig({ installDir, env = process.env, host = "claude", run
 }
 
 // sdk/runtime/posture.mjs
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID as randomUUID2, timingSafeEqual } from "node:crypto";
 var POSTURE_SCHEMA = "osuite.runtime_posture.v1";
 var MAX_FRESHNESS_MS = 3e5;
 var MODE_STRENGTH = { observe: 0, enforce: 1, strict: 2 };
@@ -351,27 +372,100 @@ function configurationOnly(document) {
     ...document.rule_rollout ? ["rule_rollout"] : []
   ].map((key) => [key, document[key]]));
 }
-function mac(document, config) {
-  return createHmac("sha256", config.apiKey || "").update("osuite.posture-cache.v1\n").update(canonicalJson(document)).digest("hex");
+function mac(document, config, generation = 0, rejected = false, fenceId = null) {
+  const hash = createHmac("sha256", config.apiKey || "").update("osuite.posture-cache.v1\n").update(canonicalJson(document));
+  if (generation > 0) hash.update(`
+rejection-generation:${generation}:${rejected}`);
+  if (fenceId !== null) hash.update(`
+rejection-fence:${fenceId}`);
+  return hash.digest("hex");
 }
-function cachedDocument(value, config, now) {
+function cacheEntry(value, config, now) {
   try {
-    if (!isObject(value) || !validDocument(value.document, config, now, true) || !/^[a-f0-9]{64}$/.test(value.mac)) return null;
-    if (!timingSafeEqual(Buffer.from(value.mac, "hex"), Buffer.from(mac(value.document, config), "hex"))) return null;
-    return value.document;
+    if (!isObject(value)) return null;
+    const generation = value.generation ?? 0, rejected = value.rejected ?? false;
+    const fenceId = value.fenceId ?? null;
+    if (!Number.isSafeInteger(generation) || generation < 0 || typeof rejected !== "boolean" || fenceId !== null && !safeId(fenceId) || rejected && generation === 0 || value.document !== null && !validDocument(value.document, config, now, true) || !/^[a-f0-9]{64}$/.test(value.mac)) return null;
+    if (!timingSafeEqual(Buffer.from(value.mac, "hex"), Buffer.from(mac(value.document, config, generation, rejected, fenceId), "hex"))) return null;
+    return { document: value.document, generation, rejected, fenceId };
   } catch {
     return null;
   }
 }
-function readCache(store, config, now) {
+function signedCache(document, config, generation = 0, rejected = false, fenceId = null) {
+  return {
+    document,
+    mac: mac(document, config, generation, rejected, fenceId),
+    ...generation > 0 ? { generation, rejected } : {},
+    ...fenceId !== null ? { fenceId } : {}
+  };
+}
+function readEntry(store, config, now) {
   try {
-    return cachedDocument(store.read("posture"), config, now);
+    return cacheEntry(store.read("posture"), config, now);
   } catch {
     return null;
   }
+}
+function fenceMac(id, config) {
+  return createHmac("sha256", config.apiKey || "").update(`osuite.posture-rejection.v1
+${id}`).digest("hex");
+}
+function readFence(store, config) {
+  try {
+    const value = store.read("posture-rejection");
+    if (value == null) return { valid: true, id: null };
+    if (value.schema !== "osuite.posture-rejection.v1" || !safeId(value.id) || !/^[a-f0-9]{64}$/.test(value.mac) || !timingSafeEqual(Buffer.from(value.mac, "hex"), Buffer.from(fenceMac(value.id, config), "hex"))) return { valid: false };
+    return { valid: true, id: value.id };
+  } catch {
+    return { valid: false };
+  }
+}
+function captureRejectionFence(config, store) {
+  try {
+    const fence = readFence(store, config), raw = store.read("posture");
+    const entry = cacheEntry(raw, config, Date.now());
+    return Object.freeze({
+      valid: fence.valid && (raw == null || entry !== null),
+      id: fence.id,
+      generation: entry?.generation || 0,
+      rejected: entry?.rejected === true || (entry?.fenceId ?? null) !== fence.id
+    });
+  } catch {
+    return Object.freeze({ valid: false, rejected: true });
+  }
+}
+function rejectionFenceUnchanged(config, store, before) {
+  const current = captureRejectionFence(config, store);
+  return before?.valid === true && before.rejected === false && current.valid && !current.rejected && before.id === current.id && before.generation === current.generation;
+}
+function invalidatePostureCache(config, store, now = Date.now()) {
+  const id = randomUUID2();
+  store.write("posture-rejection", { schema: "osuite.posture-rejection.v1", id, mac: fenceMac(id, config) });
+  return cacheEntry(store.update("posture", (value) => {
+    const latest = cacheEntry(value, config, now);
+    const generation = (latest?.generation || 0) + 1;
+    if (!Number.isSafeInteger(generation)) throw new Error("Cache generation exhausted");
+    return signedCache(latest?.document || null, config, generation, true, id);
+  }), config, now);
 }
 async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
   const capable = config.ruleRolloutCapability === RULE_ROLLOUT_CAPABILITY;
+  const startedFence = readFence(store, config);
+  if (!startedFence.valid) return { available: false, blocked: true, source: "unavailable", posture: localPosture(config), revision: null };
+  try {
+    store.write("posture-storage-probe", { schema: "osuite.state-probe.v1", at: now });
+  } catch {
+    return {
+      available: false,
+      blocked: true,
+      source: "unavailable",
+      posture: offlinePosture(localPosture(config), readEntry(store, config, now)?.document?.posture),
+      revision: null
+    };
+  }
+  const startedGeneration = readEntry(store, config, now)?.generation || 0;
+  const rejectionFence = Object.freeze({ valid: true, id: startedFence.id, generation: startedGeneration, rejected: false });
   let acknowledged = null;
   if (capable) {
     const acknowledgement = await api.request("PUT", `/api/runtimes/${encodeURIComponent(config.runtimeId)}/posture`, {
@@ -382,6 +476,12 @@ async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
     }, { timeoutMs: 2e3 });
     const value = acknowledgement.body;
     if (!acknowledgement.ok || !validAcknowledgement(value, config, now)) {
+      if (!isTransientFailure(acknowledgement)) {
+        try {
+          invalidatePostureCache(config, store, now);
+        } catch {
+        }
+      }
       return { available: false, blocked: true, source: "unavailable", posture: localPosture(config), revision: null };
     }
     acknowledged = value;
@@ -389,17 +489,35 @@ async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
   const query = new URLSearchParams({ agent_id: config.agentId });
   if (config.provider) query.set("provider", config.provider);
   const response = await api.request("GET", `/api/runtimes/${encodeURIComponent(config.runtimeId)}/posture?${query}`, void 0, { timeoutMs: 2e3 });
-  const rejected = [401, 403, 409].includes(response.status);
-  let cached = readCache(store, config, now);
-  if (response.ok && response.status === 200 && validDocument(response.body, config, now) && (!capable || matchesAcknowledgement(response.body, acknowledged)) && preservesRolloutFloor(cached, response.body) && (!cached || Date.parse(response.body.issued_at) >= Date.parse(cached.issued_at))) {
+  const validResponse = response.ok && response.status === 200 && validDocument(response.body, config, now) && (!capable || matchesAcknowledgement(response.body, acknowledged));
+  const rejected = !validResponse && !isTransientFailure(response);
+  let entry = readEntry(store, config, now), cached = entry?.document;
+  if (rejected) {
+    try {
+      entry = invalidatePostureCache(config, store, now);
+      cached = entry?.document;
+    } catch {
+      return {
+        available: false,
+        blocked: true,
+        source: "unavailable",
+        posture: offlinePosture(localPosture(config), cached?.posture),
+        revision: cached?.revision || null
+      };
+    }
+  }
+  if (validResponse && preservesRolloutFloor(cached, response.body) && (!cached || Date.parse(response.body.issued_at) >= Date.parse(cached.issued_at))) {
     const document = configurationOnly(response.body);
     try {
       const saved = store.update("posture", (value) => {
-        const latest = cachedDocument(value, config, now);
-        return latest && (Date.parse(latest.issued_at) > Date.parse(document.issued_at) || !preservesRolloutFloor(latest, document)) ? value : { document, mac: mac(document, config) };
+        const latest = cacheEntry(value, config, now), previous = latest?.document;
+        const currentFence = readFence(store, config);
+        if (!currentFence.valid || currentFence.id !== startedFence.id || (latest?.generation || 0) !== startedGeneration) return value;
+        return previous && (Date.parse(previous.issued_at) > Date.parse(document.issued_at) || !preservesRolloutFloor(previous, document)) ? value : signedCache(document, config, startedGeneration, false, startedFence.id);
       });
-      cached = cachedDocument(saved, config, now);
-      if (cached && canonicalJson(cached) === canonicalJson(document)) {
+      entry = cacheEntry(saved, config, now);
+      cached = entry?.document;
+      if (rejectionFenceUnchanged(config, store, rejectionFence) && cached && canonicalJson(cached) === canonicalJson(document)) {
         return {
           available: true,
           blocked: false,
@@ -407,16 +525,18 @@ async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
           posture: document.posture,
           revision: document.revision,
           ruleRollout: document.rule_rollout,
-          orgId: document.org_id
+          orgId: document.org_id,
+          rejectionFence
         };
       }
     } catch {
-      const posture2 = offlinePosture(offlinePosture(localPosture(config), readCache(store, config, now)?.posture), document.posture);
-      return { available: false, blocked: capable || posture2.mode !== "observe", source: "unavailable", posture: posture2, revision: cached?.revision || null };
+      const posture2 = offlinePosture(offlinePosture(localPosture(config), readEntry(store, config, now)?.document?.posture), document.posture);
+      return { available: false, blocked: true, source: "unavailable", posture: posture2, revision: cached?.revision || null };
     }
   }
   const posture = offlinePosture(localPosture(config), cached?.posture);
-  if (!rejected && !(capable && response.ok) && cached && Date.parse(cached.valid_until) > now && validNegotiation(cached, config, now)) {
+  const fenced = !rejectionFenceUnchanged(config, store, rejectionFence);
+  if (!rejected && !entry?.rejected && !fenced && !(capable && response.ok) && cached && Date.parse(cached.valid_until) > now && validNegotiation(cached, config, now)) {
     if (capable && !matchesAcknowledgement(cached, acknowledged)) return { available: false, blocked: true, source: "unavailable", posture, revision: cached.revision };
     return {
       available: true,
@@ -425,10 +545,18 @@ async function resolveRemotePosture(config, { api, store, now = Date.now() }) {
       posture,
       revision: cached.revision,
       ruleRollout: cached.rule_rollout,
-      orgId: cached.org_id
+      orgId: cached.org_id,
+      rejectionFence
     };
   }
-  return { available: false, blocked: rejected || capable || posture.mode !== "observe", source: "unavailable", posture, revision: cached?.revision || null };
+  return {
+    available: false,
+    blocked: rejected || fenced || entry?.rejected === true || capable || posture.mode !== "observe",
+    source: "unavailable",
+    posture,
+    revision: cached?.revision || null,
+    rejectionFence
+  };
 }
 
 // sdk/runtime/shell.mjs
@@ -1010,7 +1138,8 @@ function installCheck(payload, context) {
 async function admitAction(context, { api, config, sleep = delay, now = () => performance.now(), beforeRelease = async () => true } = {}) {
   const guard = await api.request("POST", "/api/guard", context);
   if (!guard.ok) {
-    const failOpen = config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY && !config.ruleRollout?.enabled && config.guardFailureMode === "allow" && ![401, 403, 409].includes(guard.status) && !["signing_unavailable", "invalid_response", "invalid_request"].includes(guard.error);
+    if (!isTransientFailure(guard)) return closed("guard_rejected", { rejectedStatus: guard.status });
+    const failOpen = ["observe", "enforce"].includes(config.mode) && config.ruleRolloutCapability !== RULE_ROLLOUT_CAPABILITY && !config.ruleRollout?.enabled && config.guardFailureMode === "allow";
     return { ...closed("guard_unavailable"), decision: failOpen ? "allow" : "block", degraded: true };
   }
   const requestedDecision = guard.body?.decision;
@@ -1020,14 +1149,19 @@ async function admitAction(context, { api, config, sleep = delay, now = () => pe
   const finish = (result4) => rollout.binding ? { ...result4, observeOnly: false, ruleRolloutBinding: rollout.binding } : result4;
   if (requestedDecision === "block") {
     const observeOnly = config.mode === "observe" && !rollout.binding;
-    if (observeOnly) await api.request("POST", "/api/actions", { ...context, status: "blocked" });
+    if (observeOnly) {
+      const recorded = await api.request("POST", "/api/actions", { ...context, status: "blocked" });
+      if (!recorded.ok && (!isTransientFailure(recorded) || config.guardFailureMode !== "allow")) {
+        return closed("admission_unconfirmed", { rejectedStatus: recorded.status });
+      }
+    }
     return finish({ ...closed("policy_block"), observeOnly, response: guard.body });
   }
   const created = await api.request("POST", "/api/actions", {
     ...context,
     status: REVIEW_DECISIONS.has(requestedDecision) ? "pending_approval" : "running"
   });
-  if (!created.ok) return closed("admission_unconfirmed");
+  if (!created.ok) return closed("admission_unconfirmed", { rejectedStatus: created.status });
   if (!rolloutAuthority(created.body, context, config, rollout.binding).valid) return closed("rule_rollout_binding_invalid");
   const diagnostic = installCheck(created.body, context);
   if (diagnostic) return finish(diagnostic);
@@ -1045,7 +1179,7 @@ async function admitAction(context, { api, config, sleep = delay, now = () => pe
       timeoutMs: Math.max(1, Math.min(2500, deadline - now()))
     });
     if (!polled.ok) {
-      if ([401, 403].includes(polled.status)) return closed("approval_access_rejected", { actionId: expected.actionId });
+      if ([401, 403, 409].includes(polled.status)) return closed("approval_access_rejected", { actionId: expected.actionId, rejectedStatus: polled.status });
       continue;
     }
     const action = polled.body?.action || polled.body;
@@ -1063,7 +1197,7 @@ async function admitAction(context, { api, config, sleep = delay, now = () => pe
       return closed("approval_not_confirmed", { actionId: expected.actionId });
     }
     const current = await api.request("POST", "/api/actions", { ...context, status: "running" });
-    if (!current.ok) return closed("admission_unconfirmed", { actionId: expected.actionId });
+    if (!current.ok) return closed("admission_unconfirmed", { actionId: expected.actionId, rejectedStatus: current.status });
     if (!rolloutAuthority(current.body, context, config, rollout.binding).valid) return closed("rule_rollout_binding_invalid", { actionId: expected.actionId });
     result3 = finish(actionAdmission(current.body, "allow", context, expected));
     if (result3.authorized && !await beforeRelease(result3.response)) return closed("action_evidence_changed", { actionId: result3.actionId });
@@ -1176,6 +1310,7 @@ async function recordOutcome(config, data, { api, store, now = Date.now } = {}) 
 
 // sdk/runtime/hook.mjs
 var note = (message) => ({ exitCode: 0, stdout: message ? { systemMessage: `[OSuite] ${message}` } : {}, stderr: "" });
+var accessChanged = "Runtime access changed during this request. No execution is authorized. Do not retry automatically; reconcile in Studio.";
 function deny(message) {
   const reason = `[OSuite] ${message}`;
   return { exitCode: 2, stderr: reason, stdout: { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } } };
@@ -1190,9 +1325,16 @@ function applyPosture(config, posture) {
     approvalTimeoutSeconds: posture.approval_timeout_seconds
   };
 }
+function trackPostureRejections(api, config, store, now = Date.now) {
+  return { request: async (...args) => {
+    const response = await api.request(...args);
+    if ([401, 403, 409].includes(response.status)) invalidatePostureCache(config, store, now());
+    return response;
+  } };
+}
 async function emitRuntimeEvent(api, config, context, eventType, actionId = null, payload = {}) {
   return api.request("POST", `/api/runtime-sessions/${encodeURIComponent(context.runtime_session_id)}/events`, {
-    event_id: `evt_${randomUUID2()}`,
+    event_id: `evt_${randomUUID3()}`,
     runtime_session_id: context.runtime_session_id,
     event_type: eventType,
     tool_name: context.tool_name || null,
@@ -1257,19 +1399,21 @@ function updatePending(store, context, entry = null) {
   if (entries.length) store.write(key, entries.slice(-64));
   else store.remove(key);
 }
-async function stopHook(data, config, api, store) {
+async function stopHook(data, config, api, store, fenceUnchanged) {
   const session = deriveSessionId(data, config), key = `pending:${session}`;
   const saved = store.read(key);
   if (!Array.isArray(saved) || !saved.length) return note();
   const retained = [], decided = [];
   const deadline = performance.now() + 3e3;
   for (const entry of saved) {
+    if (!fenceUnchanged()) return note(accessChanged);
     if (!safeId(entry.action_id)) continue;
     if (performance.now() >= deadline) {
       retained.push(entry);
       continue;
     }
     const response = await api.request("GET", `/api/actions/${encodeURIComponent(entry.action_id)}`, void 0, { timeoutMs: Math.max(1, deadline - performance.now()) });
+    if ([401, 403, 409].includes(response.status) || !fenceUnchanged()) return note(accessChanged);
     if (!response.ok) {
       retained.push(entry);
       continue;
@@ -1289,8 +1433,13 @@ async function stopHook(data, config, api, store) {
       decided.push("A held action has an uncertain execution outcome. Do not retry automatically; reconcile its action/replay in Studio.");
     } else decided.push("A held action was denied, expired, or closed. Do not retry automatically; tell the user.");
   }
+  if (!fenceUnchanged()) return note(accessChanged);
   if (retained.length) store.write(key, retained);
   else store.remove(key);
+  if (!fenceUnchanged()) {
+    store.write(key, saved);
+    return note(accessChanged);
+  }
   if (decided.length && !data.stop_hook_active) return { exitCode: 0, stderr: "", stdout: { decision: "block", reason: `[OSuite] ${decided.join(" ")}` } };
   return note(decided.join(" ") || "An action is still held for human review. No tool was executed by this hook.");
 }
@@ -1305,35 +1454,44 @@ async function runHook(data, localConfig, dependencies = {}) {
     const apiFactory = dependencies.apiFactory || createApiClient;
     let api = dependencies.api || apiFactory(localConfig);
     if (event === "PostToolUse" || event === "PostToolUseFailure") {
-      const result4 = await recordOutcome(localConfig, data, { api, store, now });
-      return note(result4.reason ? "Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect." : "");
+      const fence2 = captureRejectionFence(localConfig, store);
+      const result4 = await recordOutcome(localConfig, data, { api: trackPostureRejections(api, localConfig, store, now), store, now });
+      return note(result4.reason ? "Tool outcome is not yet acknowledged. Evidence was retained; do not repeat the side effect." : rejectionFenceUnchanged(localConfig, store, fence2) === true ? "" : accessChanged);
     }
     const remote = await resolveRemotePosture(localConfig, { api, store, now: now() });
+    const fence = remote.rejectionFence;
+    const fenceUnchanged = () => rejectionFenceUnchanged(localConfig, store, fence) === true;
+    const checkedNote = (message) => fenceUnchanged() ? note(message) : pre ? deny(accessChanged) : note(accessChanged);
     const config = {
       ...applyPosture(localConfig, remote.posture),
       ruleRollout: remote.ruleRollout,
       orgId: remote.orgId || localConfig.orgId
     };
-    api = dependencies.api || apiFactory(config);
-    if (event === "Stop") return stopHook(data, config, api, store);
+    api = trackPostureRejections(dependencies.api || apiFactory(config), localConfig, store, now);
+    if (event === "Stop") {
+      const stopped = await stopHook(data, config, api, store, fenceUnchanged);
+      return fenceUnchanged() ? stopped : note(accessChanged);
+    }
     if (remote.blocked) return pre ? deny("Verified runtime posture is unavailable or expired. Execution is blocked; reconnect or restore access.") : note("Verified runtime posture is unavailable. Enforce hooks will block execution until it can be verified.");
     if (!pre && event !== "SessionStart" && event !== "SessionEnd") return note("Unsupported hook event; no execution decision was made.");
     const session = await openSession(api, config, data, store, now());
+    if (!fenceUnchanged()) return pre ? deny(accessChanged) : note(accessChanged);
     if (!pre) {
       await emitRuntimeEvent(api, config, { runtime_session_id: session }, event === "SessionStart" ? "session_started" : "session_ended");
-      return note(remote.available ? "" : "Observe mode is active without verified remote posture. This is not governance authorization.");
+      return checkedNote(remote.available ? "" : "Observe mode is active without verified remote posture. This is not governance authorization.");
     }
     const context = { ...initialContext, tool_name: data.tool_name };
     if (!remote.available) {
       rememberGap(store, "posture_unavailable", now());
-      return note("Not governed: remote posture is unavailable; explicit observe mode does not enforce OSuite policy.");
+      return checkedNote("Not governed: remote posture is unavailable; explicit observe mode does not enforce OSuite policy.");
     }
     await emitRuntimeEvent(api, config, context, "tool_preflight", null, { tool_input_digest: context.tool_input_digest, install_check: config.installCheck === true });
+    if (!fenceUnchanged()) return deny(accessChanged);
     const result3 = await admitAction(context, { api, config, ...dependencies.admission, beforeRelease: (response) => validateGitPublication(context, response) });
     if (result3.degraded) {
       rememberGap(store, result3.reason, now());
       await emitRuntimeEvent(api, config, context, "governance_unavailable", null, { decision: result3.decision === "allow" ? "guard_unavailable" : "guard_unavailable_blocked" });
-      return result3.decision === "allow" ? note("Not governed: the guard is unavailable and this verified posture explicitly allows availability fallback. No authorization or completion is claimed.") : deny("Guard unavailable. Verified policy requires blocking this call.");
+      return result3.decision === "allow" ? checkedNote("Not governed: the guard is unavailable and this verified posture explicitly allows availability fallback. No authorization or completion is claimed.") : deny("Guard unavailable. Verified policy requires blocking this call.");
     }
     await flushGap(api, config, context, store);
     if (result3.installCheck) {
@@ -1357,7 +1515,7 @@ async function runHook(data, localConfig, dependencies = {}) {
       }
       updatePending(store, context);
       await emitRuntimeEvent(api, config, context, "tool_allowed", result3.actionId, { decision: result3.decision, install_check: config.installCheck === true });
-      return note(config.mode === "observe" && !result3.ruleRolloutBinding ? "Observe mode recorded a policy result; it does not enforce OSuite policy." : result3.decision === "warn" ? "OSuite authorized this call with a policy warning." : "");
+      return checkedNote(config.mode === "observe" && !result3.ruleRolloutBinding ? "Observe mode recorded a policy result; it does not enforce OSuite policy." : result3.decision === "warn" ? "OSuite authorized this call with a policy warning." : "");
     }
     if (result3.decision === "require_approval") {
       if (result3.observeOnly !== true) updatePending(store, context, {
@@ -1368,10 +1526,10 @@ async function runHook(data, localConfig, dependencies = {}) {
         fingerprint: cavaFingerprint(result3.response)
       });
       await emitRuntimeEvent(api, config, context, "tool_requires_approval", result3.actionId, { decision: result3.observeOnly === true ? "observe_would_require_approval" : result3.response?.decision?.decision || "require_approval" });
-      return result3.observeOnly === true ? note("Observe mode: this call would require human approval; it is not authorized by a reviewer.") : deny(`Human approval is still required for action ${result3.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
+      return result3.observeOnly === true ? checkedNote("Observe mode: this call would require human approval; it is not authorized by a reviewer.") : deny(`Human approval is still required for action ${result3.actionId}. Do not run or automatically retry it. Review it in OSuite Studio.`);
     }
     await emitRuntimeEvent(api, config, context, "tool_blocked", result3.actionId, { decision: result3.observeOnly === true ? "observe_would_block" : "block", reason: result3.reason });
-    return result3.observeOnly === true ? note("Observe mode: OSuite policy would block this call. It is not authorized by OSuite.") : deny(`OSuite policy did not authorize this exact action (${result3.reason}). Do not retry automatically.`);
+    return result3.observeOnly === true ? checkedNote("Observe mode: OSuite policy would block this call. It is not authorized by OSuite.") : deny(`OSuite policy did not authorize this exact action (${result3.reason}). Do not retry automatically.`);
   } catch {
     return pre ? deny("Hook evidence or state is invalid. Execution is blocked; no successful admission is claimed.") : note("Runtime evidence could not be recorded. No completion or authorization is claimed.");
   }
@@ -1408,7 +1566,7 @@ async function runHookCli({ host, installDir, event = "PreToolUse", runtimeId } 
 }
 
 // sdk/runtime/mcp.mjs
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
 import { setTimeout as delay2 } from "node:timers/promises";
 var COVERAGE = "Advisory MCP governance bridge, not an execution gateway. Direct resource access and alternative tools are outside coverage.";
 var string = { type: "string" };
@@ -1445,15 +1603,19 @@ function result2(data, error = false) {
 var failure = (message) => result2({ authorized: false, error: message }, true);
 function createMcpServer(localConfig, dependencies = {}) {
   let store = dependencies.store;
-  let sessionId = `sess_${randomUUID3()}`;
+  let sessionId = `sess_${randomUUID4()}`;
   const ensureStore = () => store ||= createStateStore(localConfig);
   const baseApi = () => dependencies.api || createApiClient(localConfig);
+  const fenceUnchanged = (active) => rejectionFenceUnchanged(localConfig, ensureStore(), active.fence) === true;
+  const accessChanged2 = () => failure("Runtime access changed during this request. No execution is authorized. Do not retry automatically; reconcile in Studio.");
+  const checkedResult = (active, data, error = false) => fenceUnchanged(active) ? result2(data, error) : accessChanged2();
   async function current() {
     const remote = await resolveRemotePosture(localConfig, { api: baseApi(), store: ensureStore(), now: Date.now() });
+    const fence = remote.rejectionFence;
     if (!remote.available || remote.blocked) return null;
     const config = applyPosture(localConfig, remote.posture);
     if (config.signatureMode === "required" && !config.privateKeyBase64) return null;
-    return { config, api: dependencies.api || createApiClient(config) };
+    return { config, fence, api: trackPostureRejections(dependencies.api || createApiClient(config), localConfig, store) };
   }
   async function complete(args, state, { api, config }) {
     if (state.authorized !== true || !["completed", "failed", "cancelled"].includes(args.status)) return failure("An admitted action and an explicit terminal status are required.");
@@ -1491,7 +1653,6 @@ function createMcpServer(localConfig, dependencies = {}) {
     if (!response.ok || response.status !== 200 || response.body?.ok !== true || !isObject(response.body.event) || ["runtime_session_id", "action_id", "tool_use_id", "event_type"].some((field) => response.body.event[field] !== event[field]) || response.body.event.payload?.status !== args.status || response.body.event.payload?.outcome_source !== "mcp_caller_report") {
       return result2({ recorded: false, action_id: args.action_id, message: "Outcome event acknowledgement is pending. Do not repeat the side effect." }, true);
     }
-    store.remove(key);
     return result2({ recorded: true, action_id: args.action_id, status: args.status, outcome_source: "mcp_caller_report" });
   }
   async function callTool(name, args = {}) {
@@ -1504,7 +1665,19 @@ function createMcpServer(localConfig, dependencies = {}) {
       const active = await current();
       if (!active) return failure("Verified runtime posture or required signing is unavailable; no execution is authorized.");
       const { api, config } = active;
-      if (name === "osuite_complete_action") return complete(args, state, active);
+      if (!fenceUnchanged(active)) return accessChanged2();
+      if (name === "osuite_complete_action") {
+        const completed = await complete(args, state, active);
+        if (completed.structuredContent.recorded !== true) return completed;
+        if (!fenceUnchanged(active)) return accessChanged2();
+        const key = `mcp:${args.action_id}`;
+        store.remove(key);
+        if (!fenceUnchanged(active)) {
+          store.write(key, state);
+          return accessChanged2();
+        }
+        return completed;
+      }
       if (name === "osuite_record_assumption") {
         if (typeof args.assumption !== "string" || !args.assumption.trim() || args.assumption.length > 4e3) return failure("A bounded assumption is required.");
         const response = await api.request("POST", "/api/assumptions", {
@@ -1515,20 +1688,22 @@ function createMcpServer(localConfig, dependencies = {}) {
         });
         if (!response.ok || !isObject(response.body?.assumption)) return failure("Assumption acknowledgement is pending.");
         await emitRuntimeEvent(api, config, state.context, "assumption_recorded", args.action_id, { source: "mcp_caller_report" });
-        return result2({ action_id: args.action_id, recorded: true, validated: false });
+        return checkedResult(active, { action_id: args.action_id, recorded: true, validated: false });
       }
       if (name === "osuite_wait_for_approval") {
         const requested = Number(args.timeout_seconds ?? 30);
         const deadline = performance.now() + (Number.isFinite(requested) ? Math.max(0, Math.min(40, requested)) * 1e3 : 0);
         do {
+          if (!fenceUnchanged(active)) return accessChanged2();
           const response = await api.request("GET", `/api/actions/${encodeURIComponent(args.action_id)}`, void 0, { timeoutMs: 2e3 });
-          if ([401, 403].includes(response.status)) return failure("Approval access was rejected.");
+          if ([401, 403, 409].includes(response.status)) return failure("Approval access was rejected. Do not retry automatically; reconcile in Studio.");
+          if (!fenceUnchanged(active)) return accessChanged2();
           if (response.ok) {
             const action = response.body?.action || response.body;
             if (!matchesAction(response.body, state.context, { actionId: args.action_id, fingerprint: state.fingerprint })) return failure("Approval evidence no longer matches the held tool input.");
             if (action.status === "running") {
               const observed = Boolean(action.approved_by || action.approved_at) && action.approval_redeemed_at == null && action.timestamp_end == null;
-              return result2({
+              return checkedResult(active, {
                 action_id: args.action_id,
                 approved: false,
                 approval_observed: observed,
@@ -1537,29 +1712,32 @@ function createMcpServer(localConfig, dependencies = {}) {
                 message: observed ? "Submit exactly the same tool input through osuite_preflight_action again. A GET does not redeem a grant or authorize execution." : "The outcome may be unknown or already consumed. Do not retry automatically; reconcile in Studio."
               });
             }
-            if (action.status !== "pending_approval") return result2({ action_id: args.action_id, approved: false, authorized: false, status: action.status, message: "The held request is closed. Do not retry automatically." });
+            if (action.status !== "pending_approval") return checkedResult(active, { action_id: args.action_id, approved: false, authorized: false, status: action.status, message: "The held request is closed. Do not retry automatically." });
           }
           if (performance.now() >= deadline) break;
           await delay2(Math.min(3e3, deadline - performance.now()));
         } while (performance.now() < deadline);
-        return result2({ action_id: args.action_id, approved: false, authorized: false, status: "timeout", message: "Still held; do not execute this call." });
+        return checkedResult(active, { action_id: args.action_id, approved: false, authorized: false, status: "timeout", message: "Still held; do not execute this call." });
       }
       await openSession(api, config, { session_id: sessionId }, store);
-      if (name === "osuite_begin_session") return result2({ runtime_session_id: sessionId, runtime_adapter_id: config.runtimeId, mode: config.mode, guard_failure_mode: config.guardFailureMode, coverage: COVERAGE });
+      if (!fenceUnchanged(active)) return accessChanged2();
+      if (name === "osuite_begin_session") return checkedResult(active, { runtime_session_id: sessionId, runtime_adapter_id: config.runtimeId, mode: config.mode, guard_failure_mode: config.guardFailureMode, coverage: COVERAGE });
       if (name === "osuite_end_session") {
         await emitRuntimeEvent(api, config, { runtime_session_id: sessionId }, "session_ended", null, { source: "mcp_caller_report" });
+        if (!fenceUnchanged(active)) return accessChanged2();
         const ended = sessionId;
-        sessionId = `sess_${randomUUID3()}`;
-        return result2({ ended_runtime_session_id: ended });
+        sessionId = `sess_${randomUUID4()}`;
+        return checkedResult(active, { ended_runtime_session_id: ended });
       }
       if (typeof args.action_type !== "string" || !args.action_type || args.action_type.length > 128 || typeof args.declared_goal !== "string" || !args.declared_goal || args.declared_goal.length > 2e3 || !Object.hasOwn(args, "tool_input")) return failure("A bounded action_type, declared_goal and complete tool_input are required.");
-      const data = { session_id: sessionId, tool_name: args.tool_name, tool_input: args.tool_input, tool_use_id: args.tool_use_id || `tool_${randomUUID3()}` };
+      const data = { session_id: sessionId, tool_name: args.tool_name, tool_input: args.tool_input, tool_use_id: args.tool_use_id || `tool_${randomUUID4()}` };
       const context = buildActionContext(data, config);
       if (args.tool_name !== "Bash") context.declared_goal = args.declared_goal;
       if (Number.isSafeInteger(args.risk_score) && args.risk_score >= 0 && args.risk_score <= 100) context.risk_score = Math.max(context.risk_score, args.risk_score);
       if (args.reversible === false) context.reversible = false;
       const eventContext = { ...context, tool_name: args.tool_name };
       await emitRuntimeEvent(api, config, eventContext, "tool_preflight", null, { tool_input_digest: context.tool_input_digest, source: "mcp_bridge" });
+      if (!fenceUnchanged(active)) return accessChanged2();
       const admitted = await admitAction(context, { api, config: { ...config, approvalWaitMs: 0 }, beforeRelease: (response) => validateGitPublication(context, response) });
       if (admitted.actionId && (admitted.authorized || admitted.decision === "require_approval")) {
         const key = `mcp:${admitted.actionId}`;
@@ -1576,7 +1754,7 @@ function createMcpServer(localConfig, dependencies = {}) {
       }
       const eventType = admitted.degraded ? "governance_unavailable" : admitted.authorized ? "tool_allowed" : admitted.decision === "require_approval" ? "tool_requires_approval" : "tool_blocked";
       await emitRuntimeEvent(api, config, eventContext, eventType, admitted.actionId, { decision: admitted.degraded ? "guard_unavailable" : admitted.decision, source: "mcp_bridge" });
-      return result2({
+      return checkedResult(active, {
         decision: admitted.decision,
         authorized: admitted.authorized === true && config.mode !== "observe",
         action_id: admitted.actionId || null,

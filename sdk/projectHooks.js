@@ -121,7 +121,10 @@ export function mergeHookSettings(existingText, templateText) {
         return existing;
       }
       migrated.push({ event, matcher: group.matcher, command: replacement.command });
-      return { ...existing, ...replacement };
+      // Migrating a stock command is not consent to change its host failure policy.
+      const runtimeReplacement = { ...replacement };
+      delete runtimeReplacement.onFailure;
+      return { ...existing, ...runtimeReplacement };
     }) }));
     const present = next.flatMap((group) => (Array.isArray(group?.hooks) ? group.hooks : []));
     for (const group of Array.isArray(groups) ? groups : []) {
@@ -237,6 +240,7 @@ export function buildNodeRuntimeBootstrap(runtime, bootstrap = {}, { projectRoot
     files[`${directory}/hooks/osuite_${script}.mjs`] = `#!/usr/bin/env node\nimport { fileURLToPath } from 'node:url';\nimport { runHookCli } from '../runtime/hook.mjs';\nawait runHookCli({ host: ${literal(host)}, runtimeId: ${literal(runtimeId)}, installDir: fileURLToPath(new URL('..', import.meta.url)), event: ${literal(event)} });\n`;
     const absolute = path.join(path.resolve(projectRoot), directory, `hooks/osuite_${script}.mjs`);
     const handler = { type: 'command', command: `node ${shellQuote(absolute)}`, timeout: 60 };
+    if (host === 'claude' && event === 'PreToolUse') handler.onFailure = 'block';
     if (host === 'codex') handler.commandWindows = `node "${absolute.replace(/"/g, '""')}"`;
     settings.hooks[event] = [{ hooks: [handler] }];
   }
@@ -608,13 +612,136 @@ function findCommand(settings, event, script, flat = false) {
     .find((hook) => typeof hook?.command === 'string' && hookScriptName(hook.command).replace(/\.(py|mjs)$/, '') === script.replace(/\.(py|mjs)$/, '')) || null;
 }
 
-/** OSuite hooks registered in this project, with anything that stops them from running. */
-export function findHookInstallations(projectRoot, runtimes = Object.keys(RUNTIME_HOOKS)) {
+function managedFileStatus(projectRoot, relativePath, expected) {
+  try {
+    let absolute = fs.realpathSync(projectRoot);
+    const parts = relativePath.split('/');
+    for (let index = 0; index < parts.length; index += 1) {
+      absolute = path.join(absolute, parts[index]);
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink() || (index < parts.length - 1 ? !stat.isDirectory() : !stat.isFile())) return 'unverified';
+      if (index === parts.length - 1 && expected !== undefined && stat.size !== Buffer.byteLength(expected)) return 'different';
+    }
+    // Only callers' known managed paths reach here, never a path parsed from a command.
+    return expected === undefined || fs.readFileSync(absolute).equals(Buffer.from(expected)) ? 'current' : 'different';
+  } catch (error) {
+    return error.code === 'ENOENT' ? 'missing' : 'unverified';
+  }
+}
+
+function isManagedHookCommand(command, projectRoot, relativePath) {
+  if (typeof command !== 'string') return false;
+  const executable = relativePath.endsWith('.py') ? 'python3' : 'node';
+  const text = command.trim();
+  // Recognize the former stock Codex template without evaluating its substitution.
+  if (relativePath.startsWith('.codex/') && executable === 'python3'
+      && text === `python3 "$(git rev-parse --show-toplevel)/${relativePath}"`) return true;
+  if (!text.startsWith(`${executable} `)) return false;
+  const word = text.slice(executable.length + 1).trim();
+  let file;
+  if (word.startsWith("'") && word.endsWith("'")) {
+    file = word.slice(1, -1).replace(/'\\''/g, "'");
+    if (`'${file.replace(/'/g, "'\\''")}'` !== word) return false;
+  } else if (/^"[^"$`\\]*"$/.test(word)) file = word.slice(1, -1);
+  else if (/^[a-zA-Z0-9_./:@+-]+$/.test(word)) file = word;
+  else return false;
+  if (file === relativePath || file === `./${relativePath}`) return true;
+  const suffix = `${path.sep}${relativePath.split('/').join(path.sep)}`;
+  if (!path.isAbsolute(file) || !file.endsWith(suffix)) return false;
+  try {
+    // A project-root alias is still this installation; arbitrary script paths are not.
+    return fs.realpathSync(file.slice(0, -suffix.length) || path.parse(file).root) === fs.realpathSync(projectRoot);
+  } catch {
+    return false;
+  }
+}
+
+function diagnoseHookInstallation(projectRoot, installation, registered) {
+  const spec = RUNTIME_HOOKS[installation.runtime];
+  const warnings = [];
+  const files = [];
+  const registrations = [];
+  let canProbe = Boolean(installation.pretool);
+  let bundle;
+  try {
+    bundle = buildNodeRuntimeBootstrap(installation.runtime, {}, { projectRoot });
+  } catch {
+    warnings.push('Packaged Node runtime could not be read; installation freshness is not verified');
+    canProbe = false;
+  }
+  const expectedSettings = bundle && JSON.parse(bundle.files[bundle.node_runtime.settings_path]);
+  const hasNode = registered.some(hook => hookScriptName(hook.command).endsWith('.mjs'));
+  if (hasNode && bundle) {
+    for (const [relativePath, expected] of Object.entries(bundle.files)) {
+      if (!relativePath.startsWith(`${spec.dir}/runtime/`) && !relativePath.startsWith(`${spec.dir}/hooks/`)) continue;
+      const status = managedFileStatus(projectRoot, relativePath, expected);
+      files.push({ relativePath, status });
+      if (status !== 'current') {
+        canProbe = false;
+        warnings.push(status === 'different'
+          ? `${relativePath} differs from this CLI's packaged Node bytes (outdated or customized); not verified`
+          : status === 'missing' ? `${relativePath} is missing; not verified`
+            : `${relativePath} is a symlink, not a regular managed file, or unreadable; not verified`);
+      }
+    }
+  }
+  for (const hook of registered) {
+    const script = hookScriptName(hook.command);
+    const relativePath = `${spec.dir}/hooks/${script}`;
+    const legacy = script.endsWith('.py');
+    const expected = expectedSettings && eventHooks(expectedSettings, hook.event, spec.flatHooks)
+      .find(item => hookScriptName(item.command).replace(/\.mjs$/, '') === script.replace(/\.(py|mjs)$/, ''));
+    const recognized = Boolean(expected) && ['command', undefined].includes(hook.type)
+      && isManagedHookCommand(hook.command, projectRoot, relativePath)
+      && (hook.commandWindows === undefined || hook.commandWindows === expected.commandWindows
+        || isManagedHookCommand(hook.commandWindows, projectRoot, relativePath));
+    const status = recognized ? legacy ? 'legacy' : 'current' : 'unverified';
+    registrations.push({ settingsPath: hook.settingsPath, event: hook.event, command: hook.command, status });
+    const location = `${hook.settingsPath} ${hook.event}`;
+    if (installation.runtime === 'claude' && hook.event === 'PreToolUse' && hook.onFailure !== 'block') {
+      warnings.push(`${location} lacks onFailure: 'block'; native crashes/timeouts may fail open. Review explicitly: this option requires Claude Code 2.1.295 or newer; installed host version support is not verified. Existing settings were preserved.`);
+    }
+    if (legacy) warnings.push(`${location} registers legacy Python ${script}; current Node version is not verified`);
+    if (!recognized) {
+      canProbe = false;
+      warnings.push(`${location}: custom path or unrecognized command for ${script} was preserved; not verified and will not be executed by doctor`);
+    } else if (legacy && managedFileStatus(projectRoot, relativePath) !== 'current') {
+      // The direct probe invokes pre/post only; legacy Stop/Session gaps remain warnings.
+      if ([spec.preEvent || 'PreToolUse', spec.postEvent || 'PostToolUse'].includes(hook.event)) canProbe = false;
+      warnings.push(`${relativePath} is missing or is not a regular managed file; legacy installation is not verified`);
+    }
+  }
+  const byEvent = new Map();
+  for (const hook of registrations) {
+    const key = `${hook.event}:${hookScriptName(hook.command).replace(/\.(py|mjs)$/, '')}`;
+    if (!byEvent.has(key)) byEvent.set(key, []);
+    byEvent.get(key).push(hook);
+  }
+  for (const group of byEvent.values()) {
+    if (group.length < 2) continue;
+    canProbe = false;
+    warnings.push(`Duplicate ${group[0].event} registrations were preserved in ${group.map(hook => hook.settingsPath).join(', ')}; not verified as a single invocation, even while disabled`);
+  }
+  if (hasNode && expectedSettings) {
+    for (const event of Object.keys(expectedSettings.hooks)) {
+      if (!registrations.some(hook => hook.event === event)) warnings.push(`No packaged ${event} registration found; the complete Node installation is not verified`);
+    }
+  }
+  return { status: hasNode && !warnings.length ? 'current' : 'not_verified', canProbe, registrations, files, warnings };
+}
+
+/**
+ * OSuite hooks registered in this project, with anything that stops them from running.
+ * Opt-in diagnosis adds read-only byte/registration checks without changing the legacy
+ * inventory shape. It compares this CLI's package, not registry or global/plugin copies.
+ */
+export function findHookInstallations(projectRoot, runtimes = Object.keys(RUNTIME_HOOKS), { diagnose = false } = {}) {
   return runtimes.flatMap((runtime) => {
     const spec = RUNTIME_HOOKS[runtime];
     if (!spec) return [];
     const problems = [];
     const disabledReasons = [];
+    const registrations = [];
     let pretoolCount = 0;
     let posttoolCount = 0;
     let pretool = null;
@@ -629,8 +756,18 @@ export function findHookInstallations(projectRoot, runtimes = Object.keys(RUNTIM
         problems.push(`${settingsPath} is not valid JSON, so ${spec.label} cannot load its hooks`);
         return;
       }
+      if (!isPlainObject(settings)) {
+        problems.push(`${settingsPath} must contain a JSON object, so ${spec.label} cannot load its hooks`);
+        return;
+      }
       disabledHookSettings(settings).forEach((reason) => disabledReasons.push(`${settingsPath}: ${runtime === 'cursor'
         ? 'explicit disableAllHooks intent was preserved; this is not a documented Cursor host control' : reason}`));
+      if (diagnose) {
+        for (const event of Object.keys(settings.hooks || {})) {
+          eventHooks(settings, event, spec.flatHooks).filter(hook => typeof hook?.command === 'string' && hookScriptName(hook.command))
+            .forEach(hook => registrations.push({ ...hook, settingsPath, event }));
+        }
+      }
       const preEvent = spec.preEvent || 'PreToolUse', postEvent = spec.postEvent || 'PostToolUse';
       const pre = findCommand(settings, preEvent, 'osuite_pretool.py', spec.flatHooks);
       const post = findCommand(settings, postEvent, 'osuite_posttool.py', spec.flatHooks);
@@ -665,8 +802,10 @@ export function findHookInstallations(projectRoot, runtimes = Object.keys(RUNTIM
         });
       }
     }
-    return [{ runtime, label: spec.label, installDir: spec.dir, pretool, posttool,
-      hostEnabled: disabledReasons.length === 0, disabledReasons, problems: [...problems, ...disabledReasons] }];
+    const installation = { runtime, label: spec.label, installDir: spec.dir, pretool, posttool,
+      hostEnabled: disabledReasons.length === 0, disabledReasons, problems: [...problems, ...disabledReasons] };
+    if (diagnose) installation.diagnostics = diagnoseHookInstallation(projectRoot, installation, registrations);
+    return [installation];
   });
 }
 
@@ -792,6 +931,12 @@ export async function runHookCheck({
   }
   state.hostEnabled = true;
   steps.push({ label: 'Host hooks enabled', ok: true, detail: 'project settings permit hooks; actual host invocation is not verified by this direct probe' });
+
+  if (installation.diagnostics?.canProbe === false) {
+    steps.push({ label: 'Hook probe', ok: false, warning: true,
+      detail: 'Not verified: direct probe skipped because installation bytes or registered commands need review; nothing was reinstalled or enabled' });
+    return result(false);
+  }
 
   const credentials = hookCredentials(projectRoot, installation, shellEnv);
   if (!credentials.baseUrl || !credentials.apiKey) {

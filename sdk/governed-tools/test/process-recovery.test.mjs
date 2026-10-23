@@ -130,6 +130,62 @@ function executionCounts(counts) {
   return { guard, actionPosts, creates, reviews, reports, writes, invalidSignatures };
 }
 
+test('a held grant, revocation, restart and policy narrowing cannot leak authority into the next operation', { timeout: 20000 }, async t => {
+  const f = await setup(t);
+  f.control.decision = 'hold';
+  let child = await f.start('old-held'); await child.send({ type: 'run' });
+  const held = await finishedOutcome(child);
+  assert.equal(held.error.code, 'AWAITING_APPROVAL');
+  f.approve(); f.control.revoked = true;
+  child = await f.start('old-held'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).error.code, 'CURRENT_AUTHORITY_UNAVAILABLE');
+  assert.equal(f.counts.writes, 0); assert.equal(f.counts.actionPosts, 1);
+  f.control.revoked = false; f.control.decision = 'block';
+  child = await f.start('old-held'); await child.send({ type: 'run' });
+  const denied = await finishedOutcome(child);
+  assert.equal(denied.error.code, 'POLICY_DENIED');
+  assert.equal(denied.status.actionId, held.status.actionId);
+  assert.equal(f.counts.writes, 0); assert.equal(f.counts.actionPosts, 1);
+  f.control.decision = 'allow';
+  child = await f.start('unrelated-new-business-operation'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).ok, true);
+  child = await f.start('old-held'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).error.code, 'POLICY_DENIED');
+  assert.equal(f.counts.creates, 2); assert.equal(f.counts.reviews, 1);
+  assert.equal(f.counts.writes, 1); assert.equal(f.counts.actionPosts, 2);
+});
+
+test('a malformed admission reply cannot contaminate a later valid operation or become permission on reopen', { timeout: 20000 }, async t => {
+  const f = await setup(t);
+  f.control.mutate = response => { response.action.agent_id = 'wrong-actor'; };
+  let child = await f.start('malformed-reply'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).error.code, 'OUTCOME_UNKNOWN');
+  assert.equal(f.counts.writes, 0); assert.equal(f.counts.actionPosts, 1);
+  f.control.mutate = null;
+  child = await f.start('next-valid-operation'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).ok, true);
+  child = await f.start('malformed-reply'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).error.code, 'OUTCOME_UNKNOWN');
+  assert.equal(f.counts.writes, 1); assert.equal(f.counts.actionPosts, 2);
+  assert.equal(f.actions.size, 2); assert.equal(f.counts.invalidSignatures, 0);
+});
+
+test('a process exiting after its effect does not lose its fence when a later operation succeeds', { timeout: 20000 }, async t => {
+  const f = await setup(t);
+  const interrupted = await f.start('effect-before-exit', 'exit-after-effect');
+  await interrupted.send({ type: 'run' });
+  await interrupted.waitFor('effect');
+  assert.deepEqual(await interrupted.closed, { code: crashExitCode, signal: null });
+  assert.equal(f.counts.writes, 1); assert.equal(f.counts.reports, 0);
+  let child = await f.start('next-independent-operation'); await child.send({ type: 'run' });
+  assert.equal((await finishedOutcome(child)).ok, true);
+  child = await f.start('effect-before-exit'); await child.send({ type: 'run' });
+  const old = await finishedOutcome(child);
+  assert.equal(old.error.code, 'OUTCOME_UNKNOWN'); assert.equal(old.nativeCalls, 0);
+  assert.equal(old.status.state, 'dispatching');
+  assert.equal(f.counts.writes, 2); assert.equal(f.counts.actionPosts, 2); assert.equal(f.counts.reports, 1);
+});
+
 test('independent concurrent children share a same-ID dispatch fence and produce at most one HTTP effect', { timeout: 20000 }, async t => {
   const f = await setup(t);
   const operationId = 'concurrent-append';
