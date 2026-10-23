@@ -188,7 +188,7 @@ permissions, symlinks/hardlinks and invalid database paths are rejected. SQLite
 uses transactional CAS and full durability. The default limit is 10,000 retained
 operations; exhaustion stops new work. Normal opening never creates a missing
 database. Explicit initialization is a provisioning action, not recovery.
-The 2.11.2 source candidate changes the default `journalOptions.busyTimeoutMs`
+Version 2.11.2 changes the default `journalOptions.busyTimeoutMs`
 from 100 to 1,000 ms; the supported range remains 0-5,000 ms. This is a bounded
 local write-lock budget, not extra approval time or an operation retry policy.
 After the dispatch fence commits, the existing five-second admission-receipt

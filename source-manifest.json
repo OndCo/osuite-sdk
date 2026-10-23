@@ -47,9 +47,9 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 3775,
+      "size": 3737,
       "mode": 420,
-      "sha256": "b2c1bf8dd5e96a5e2d4fb8ff91b0437210d8e69bfa44aaeabd2715f761df6bfe"
+      "sha256": "4231e5d93dfa82eed1e0905e1f19a723cf62cb09e02cccfe272ee66314bb0290"
     },
     {
       "path": "RELEASING.md",
@@ -425,9 +425,9 @@
     {
       "path": "sdk/GOVERNED_TOOLS.md",
       "source": "sdk/GOVERNED_TOOLS.md",
-      "size": 11591,
+      "size": 11578,
       "mode": 420,
-      "sha256": "4cae0bec04ab3a54c42bb2226754a4edc696a7fb3677472e314fb93d923b335c"
+      "sha256": "c2abafd7f6e75dd354457aed957ef98b38af9bf3ead77b85fd7bb0d967681ac4"
     },
     {
       "path": "sdk/LICENSE",
@@ -439,9 +439,9 @@
     {
       "path": "sdk/README.md",
       "source": "sdk/README.md",
-      "size": 33577,
+      "size": 33560,
       "mode": 420,
-      "sha256": "0d6013a4c56391e1131dae6da3c7bfa428d916bfaac4378355ab7cf3df47fff8"
+      "sha256": "2550469a7335f98f42ed228512985052a2621066cac93b6f66376e5f23490e27"
     },
     {
       "path": "sdk/activationMetrics.js",

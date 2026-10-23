@@ -7,7 +7,7 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-This source describes candidate 2.11.2. npm publication is a separate owner release;
+This source describes version 2.11.2. npm publication is a separate owner release;
 `npm view osuite version` shows what is actually available from the registry.
 To test this source without replacing a globally installed CLI:
 
@@ -53,11 +53,11 @@ non-strict outage allowances are ungoverned, not approvals. See the
 [failure-handling boundary](sdk/README.md#failure-handling-in-2111); this does not
 change what a vendor host does when its Hook process crashes or times out.
 
-The 2.11.2 source candidate corrects concurrent atomic state replacement,
+Version 2.11.2 corrects concurrent atomic state replacement,
 bounded journal contention and admission aging during local durable I/O. It
 does not replay action POSTs, native effects or uncertain operations. The
 immutable 2.11.1 package does not include these follow-up changes; confirm
-registry availability before treating this candidate as a released update.
+registry availability before installing the update.
 
 `source-manifest.json` lists the reviewed files and SHA-256 of their exact bytes.
 It is an inventory, not a cryptographic publisher signature or authorization.

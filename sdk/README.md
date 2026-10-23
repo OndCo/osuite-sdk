@@ -1,4 +1,4 @@
-# OSuite SDK (v2.11.2 Source Candidate)
+# OSuite SDK (v2.11.2)
 
 **Governed action SDK for AI agents.**
 
@@ -99,7 +99,7 @@ That setting is not a guarantee for older Claude versions or other hosts.
 
 ## Concurrent Recovery In 2.11.2
 
-The next patch rechecks bounded atomic state-file replacements without trusting
+Version 2.11.2 rechecks bounded atomic state-file replacements without trusting
 detached data or relaxing symlink/hardlink checks. The opt-in native journal
 waits up to 1,000 ms for a write lock by default, with no transaction or action
 replay. A pre-send exhausted lock remains `JOURNAL_BUSY`; it is not permission
