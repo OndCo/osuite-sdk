@@ -35,7 +35,7 @@
       "source": "scripts/sdk-release/template/Formula/osuite.rb",
       "size": 559,
       "mode": 420,
-      "sha256": "30c0e1293a596ba381ad112abce9a307d59cd9265bd17a0db1b3a1acd3a992c6"
+      "sha256": "9d622f1d5077cbdaeb1453765a087963dd1ef4912b1a080f97c4262b48577466"
     },
     {
       "path": "LICENSE",

@@ -1,8 +1,8 @@
 class Osuite < Formula
   desc "Governed action SDK and runtime hooks for AI agents"
   homepage "https://ond.cc/osuite"
-  url "https://github.com/OndCo/osuite-sdk/releases/download/v2.11.0/osuite-2.11.0.tgz"
-  sha256 "7c0e3aa45e7768ad6920536a37defb228670dea150be60248bfa07488431deaa"
+  url "https://github.com/OndCo/osuite-sdk/releases/download/v2.11.1/osuite-2.11.1.tgz"
+  sha256 "6af9dc5aa060fbd7944ee6bc63ebdbe835fe65ef78f3a792f548387e4c9b3bce"
   license "MIT"
 
   depends_on "node"
