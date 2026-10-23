@@ -140,6 +140,12 @@ export function createGovernedTools({ config: rawConfig, namespace, journalPath,
           reject(aborted() ? 'ABORTED' : 'OUTCOME_UNKNOWN', status(local(operationId)));
         }
         if (!journal.settle(scope, operationId, owner, admitted.phase, 'dispatching')) reject('OPERATION_BUSY', status(local(operationId)));
+        // Durable local I/O can outlive the admission, even without an await.
+        if (aborted() || closed || performance.now() - admitted.receivedAt > 5000) {
+          try { journal.settle(scope, operationId, owner, 'dispatching', 'uncertain'); }
+          catch { /* The committed dispatch fence still forbids replay if cleanup cannot write. */ }
+          reject(aborted() ? 'ABORTED' : 'OUTCOME_UNKNOWN', status(local(operationId)));
+        }
         let result, resultDigest = null, state = 'completed', thrown = false;
         try { result = await execute(invocation.params); }
         catch { thrown = true; state = 'uncertain'; }

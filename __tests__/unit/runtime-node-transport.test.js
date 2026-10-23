@@ -1,10 +1,10 @@
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { generateKeyPairSync, verify } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cleanups = [];
 afterEach(async () => { while (cleanups.length) await cleanups.pop()(); });
@@ -193,6 +193,113 @@ describe('Node runtime local state', () => {
     symlinkSync(target, store.path('action:tool-one'));
     expect(() => store.read('action:tool-one')).toThrow();
     expect(() => store.write('action:tool-one', { action_id: 'act-one' })).toThrow();
+    expect(readFileSync(target, 'utf8')).toBe('{"private":"not-state"}');
+  });
+
+  it.each(['read', 'write'])('rechecks an atomically replaced pathname before state %s', async operation => {
+    const { dir, store } = await fixture();
+    store.write('posture-storage-probe', { generation: 1 });
+    const file = store.path('posture-storage-probe'), replacement = path.join(dir, 'replacement');
+    writeFileSync(replacement, '{"generation":2}', { mode: 0o600 });
+    const original = fs.lstatSync;
+    let replaced = false, checks = 0;
+    const stat = vi.spyOn(fs, 'lstatSync').mockImplementation((name, ...args) => {
+      const result = original(name, ...args);
+      if (name === file) {
+        checks++;
+        if (!replaced) {
+          replaced = true;
+          fs.renameSync(replacement, file);
+          // Model the detached-inode lstat result observed during real process contention.
+          result.nlink = 0;
+        }
+      }
+      return result;
+    });
+    try {
+      if (operation === 'read') expect(store.read('posture-storage-probe')).toEqual({ generation: 2 });
+      else store.write('posture-storage-probe', { generation: 3 });
+      expect(checks).toBeGreaterThanOrEqual(2);
+    } finally { stat.mockRestore(); }
+    expect(store.read('posture-storage-probe')).toEqual({ generation: operation === 'read' ? 2 : 3 });
+  });
+
+  it('closes a genuinely detached open descriptor and reads only its checked replacement', async () => {
+    const { dir, store } = await fixture();
+    store.write('posture', { generation: 1 });
+    const replacement = path.join(dir, 'replacement');
+    writeFileSync(replacement, '{"generation":2}', { mode: 0o600 });
+    const original = fs.fstatSync;
+    let replaced = false, detached;
+    const stat = vi.spyOn(fs, 'fstatSync').mockImplementation((fd, ...args) => {
+      if (!replaced) {
+        replaced = true; detached = fd;
+        fs.renameSync(replacement, store.path('posture'));
+        expect(original(fd).nlink).toBe(0);
+      }
+      return original(fd, ...args);
+    });
+    try { expect(store.read('posture')).toEqual({ generation: 2 }); }
+    finally { stat.mockRestore(); }
+    expect(() => original(detached)).toThrow();
+  });
+
+  it('bounds repeated detached pathname observations instead of trusting them or looping forever', async () => {
+    const { store } = await fixture();
+    store.write('posture', { generation: 1 });
+    const file = store.path('posture'), original = fs.lstatSync;
+    let checks = 0;
+    const stat = vi.spyOn(fs, 'lstatSync').mockImplementation((name, ...args) => {
+      const result = original(name, ...args);
+      if (name === file) { result.nlink = 0; checks++; }
+      return result;
+    });
+    try { expect(() => store.read('posture')).toThrow(); expect(checks).toBe(3); }
+    finally { stat.mockRestore(); }
+  });
+
+  it('bounds detached descriptor retries and closes every descriptor without reading detached bytes', async () => {
+    const { store } = await fixture();
+    store.write('posture', { generation: 1 });
+    const original = fs.fstatSync;
+    const stat = vi.spyOn(fs, 'fstatSync').mockImplementation((fd, ...args) => {
+      const result = original(fd, ...args); result.nlink = 0; return result;
+    });
+    const close = vi.spyOn(fs, 'closeSync'), read = vi.spyOn(fs, 'readFileSync');
+    try {
+      expect(() => store.read('posture')).toThrow();
+      expect(stat).toHaveBeenCalledTimes(3);
+      expect(close).toHaveBeenCalledTimes(3);
+      expect(read).not.toHaveBeenCalled();
+    } finally { stat.mockRestore(); close.mockRestore(); read.mockRestore(); }
+  });
+
+  it('still refuses real hardlinks without reading or overwriting their target', async () => {
+    const { dir, store } = await fixture();
+    const target = path.join(dir, 'target');
+    writeFileSync(target, '{"private":"not-state"}', { mode: 0o600 });
+    fs.linkSync(target, store.path('posture'));
+    expect(() => store.read('posture')).toThrow();
+    expect(() => store.write('posture', { generation: 2 })).toThrow();
+    expect(readFileSync(target, 'utf8')).toBe('{"private":"not-state"}');
+  });
+
+  it('rejects a symlink replacing a detached pathname rather than following the new target', async () => {
+    const { dir, store } = await fixture();
+    const target = path.join(dir, 'target'), file = store.path('posture');
+    writeFileSync(target, '{"private":"not-state"}', { mode: 0o600 });
+    store.write('posture', { generation: 1 });
+    const original = fs.lstatSync;
+    let replaced = false;
+    const stat = vi.spyOn(fs, 'lstatSync').mockImplementation((name, ...args) => {
+      const result = original(name, ...args);
+      if (name === file && !replaced) {
+        replaced = true; fs.unlinkSync(file); symlinkSync(target, file); result.nlink = 0;
+      }
+      return result;
+    });
+    try { expect(() => store.read('posture')).toThrow(); }
+    finally { stat.mockRestore(); }
     expect(readFileSync(target, 'utf8')).toBe('{"private":"not-state"}');
   });
 

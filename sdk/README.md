@@ -1,4 +1,4 @@
-# OSuite SDK (v2.11.1)
+# OSuite SDK (v2.11.2 Source Candidate)
 
 **Governed action SDK for AI agents.**
 
@@ -25,8 +25,8 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-For this version, use `npx osuite@2.11.1 connect` after confirming availability
-with `npm view osuite@2.11.1 version`. A source checkout or this document alone
+For this version, use `npx osuite@2.11.2 connect` only after confirming availability
+with `npm view osuite@2.11.2 version`. A source checkout or this document alone
 does not establish registry publication, and npm's `latest` may differ from the
 checked-out version. The stable credential-recovery behavior and the new
 native-call operation journal are different mechanisms.
@@ -96,6 +96,18 @@ New Claude Code pre-tool registrations include `onFailure: block`, supported
 by Claude Code 2.1.295 and later and tested on 2.1.300. Existing custom or disabled
 registrations are preserved; `doctor` warns when the failure policy is absent.
 That setting is not a guarantee for older Claude versions or other hosts.
+
+## Concurrent Recovery In 2.11.2
+
+The next patch rechecks bounded atomic state-file replacements without trusting
+detached data or relaxing symlink/hardlink checks. The opt-in native journal
+waits up to 1,000 ms for a write lock by default, with no transaction or action
+replay. A pre-send exhausted lock remains `JOURNAL_BUSY`; it is not permission
+to change the business ID or clear state. Admission age is checked again after
+the durable dispatch fence, so local I/O cannot silently extend its validity.
+These source corrections are not present in immutable `2.11.1`. Verify a
+published version and its provenance before deploying it; no new Hook is enabled
+by this source update.
 
 ## The Governance Loop
 

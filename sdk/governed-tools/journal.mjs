@@ -198,7 +198,7 @@ export class OperationJournal {
       const config = dataObject(options, ['maxOperations', 'busyTimeoutMs', 'create'], 'JOURNAL_CONFIG');
       const create = config.create === undefined ? true : config.create;
       this.#maxOperations = config.maxOperations === undefined ? 10000 : config.maxOperations;
-      this.#busyTimeoutMs = config.busyTimeoutMs === undefined ? 100 : config.busyTimeoutMs;
+      this.#busyTimeoutMs = config.busyTimeoutMs === undefined ? 1000 : config.busyTimeoutMs;
       if (typeof create !== 'boolean' || !Number.isSafeInteger(this.#maxOperations) || this.#maxOperations < 1
         || !Number.isSafeInteger(this.#busyTimeoutMs) || this.#busyTimeoutMs < 0 || this.#busyTimeoutMs > 5000) fail('JOURNAL_CONFIG');
       if (typeof path !== 'string' || !isAbsolute(path) || path.length > 4096 || path.includes('\0')

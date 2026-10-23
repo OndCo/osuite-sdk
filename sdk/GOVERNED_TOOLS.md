@@ -1,7 +1,7 @@
 # Native Tool Compatibility And Recovery
 
 This opt-in API is introduced in 2.11.0; it is not part of 2.10.2. Confirm the
-chosen version with `npm view osuite@2.11.1 version` before installing. A source
+chosen version with `npm view osuite@2.11.2 version` before installing. A source
 checkout alone does not establish npm availability or server compatibility;
 consult the verified release record before enabling it for a workspace.
 
@@ -142,6 +142,7 @@ creates a different scope: never use that as a recovery shortcut.
 | `OUTCOME_UNKNOWN` | Inspect the resource separately; do not automatically resend. |
 | `POLICY_DENIED` / expiry / cancellation | Respect the terminal refusal. A new intention needs explicit operator action. |
 | `CURRENT_AUTHORITY_UNAVAILABLE` | Restore current server/identity configuration; never fall back to ungoverned execution. |
+| `JOURNAL_BUSY` | Preserve the same ID and journal; inspect contention and existing status. No automatic resend or state reset. |
 | `JOURNAL_MISSING` / invalid journal | Restore the correct durable journal; do not initialize an empty replacement to replay old IDs. |
 | `ABORTED` | The local waiter stopped. This does not revoke approval or undo a dispatched effect. |
 
@@ -187,6 +188,12 @@ permissions, symlinks/hardlinks and invalid database paths are rejected. SQLite
 uses transactional CAS and full durability. The default limit is 10,000 retained
 operations; exhaustion stops new work. Normal opening never creates a missing
 database. Explicit initialization is a provisioning action, not recovery.
+The 2.11.2 source candidate changes the default `journalOptions.busyTimeoutMs`
+from 100 to 1,000 ms; the supported range remains 0-5,000 ms. This is a bounded
+local write-lock budget, not extra approval time or an operation retry policy.
+After the dispatch fence commits, the existing five-second admission-receipt
+age limit is checked again immediately before the callback. An expired receipt
+leaves an uncertain fence; it is never renewed or automatically retried.
 Do not delete completed or unknown rows
 to make room: they are replay tombstones. Plan scoped lifecycle/retention with
 the operator, retain the WAL correctly, and never share this database over an

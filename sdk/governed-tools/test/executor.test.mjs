@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createStateStore } from '../../runtime/state.mjs';
+import { OperationJournal } from '../journal.mjs';
 import { studioFixture, bindings, params } from './studio.fixture.mjs';
 
 async function setup(t, overrides = {}) {
@@ -66,6 +67,57 @@ test('a stuck configuration-cache lock fails within a bounded read budget and is
   assert.ok(f.control.postureRequests >= 1 && f.control.postureRequests <= 6);
   assert.equal(fs.existsSync(lock), true);
   assert.equal(f.counts.guard, 0); assert.equal(f.counts.actionPosts, 0); assert.equal(f.counts.writes, 0);
+});
+
+test('a busy journal before admission reports storage contention without sending or inventing an unknown effect', async t => {
+  const f = await setup(t, { journalOptions: { busyTimeoutMs: 20 } });
+  const claim = OperationJournal.prototype.claim;
+  const mock = t.mock.method(OperationJournal.prototype, 'claim', function (...args) {
+    const competing = new DatabaseSync(f.journalPath);
+    competing.exec('BEGIN IMMEDIATE');
+    try { return Reflect.apply(claim, this, args); }
+    finally { competing.exec('ROLLBACK'); competing.close(); }
+  });
+  await assert.rejects(f.tools.run('append-1', params(), f.write), error => {
+    assert.equal(error.code, 'JOURNAL_BUSY');
+    assert.equal(error.status.state, 'prepared');
+    assert.equal(error.retryAutomatically, false);
+    assert.equal(error.recovery.nextStep, 'repair_journal');
+    return true;
+  });
+  assert.equal(f.counts.guard, 1); assert.equal(f.counts.actionPosts, 0); assert.equal(f.counts.writes, 0);
+  mock.mock.restore();
+  assert.equal((await f.tools.run('append-1', params(), f.write)).write, 1);
+  assert.equal(f.counts.guard, 2); assert.equal(f.counts.actionPosts, 1); assert.equal(f.counts.writes, 1);
+});
+
+for (const busyCleanup of [false, true]) test(`admission that ages during the durable dispatch fence never reaches the native callback (busy cleanup: ${busyCleanup})`, async t => {
+  const f = await setup(t, { journalOptions: { busyTimeoutMs: 20 } });
+  const settle = OperationJournal.prototype.settle, now = performance.now.bind(performance);
+  let elapsed = 0;
+  t.mock.method(performance, 'now', () => now() + elapsed);
+  t.mock.method(OperationJournal.prototype, 'settle', function (...args) {
+    if (busyCleanup && args[3] === 'dispatching' && args[4] === 'uncertain') {
+      const competing = new DatabaseSync(f.journalPath);
+      competing.exec('BEGIN IMMEDIATE');
+      try { return Reflect.apply(settle, this, args); }
+      finally { competing.exec('ROLLBACK'); competing.close(); }
+    }
+    const result = Reflect.apply(settle, this, args);
+    if (args[4] === 'dispatching' && result === true) elapsed += 6000;
+    return result;
+  });
+  await assert.rejects(f.tools.run('append-1', params(), f.write), error => {
+    assert.equal(error.code, 'OUTCOME_UNKNOWN');
+    assert.equal(error.status.state, busyCleanup ? 'dispatching' : 'uncertain');
+    assert.equal(error.retryAutomatically, false);
+    assert.equal(error.recovery.nextStep, 'reconcile_without_resend');
+    return true;
+  });
+  assert.equal(f.counts.actionPosts, 1); assert.equal(f.counts.writes, 0); assert.equal(f.counts.reports, 0);
+  assert.equal((await f.tools.status('append-1')).state, busyCleanup ? 'dispatching' : 'uncertain');
+  await assert.rejects(f.tools.run('append-1', params(), f.write), { code: 'OUTCOME_UNKNOWN' });
+  assert.equal(f.counts.actionPosts, 1); assert.equal(f.counts.writes, 0);
 });
 
 test('changed arguments under one operation ID conflict before another request or effect', async t => {

@@ -112,6 +112,7 @@ export function createStudioAuthority(config, journalPath) {
       reject(claimed ? 'OUTCOME_UNKNOWN' : 'CURRENT_AUTHORITY_UNAVAILABLE');
     } catch (error) {
       if (claimed) settle(phase === 'redeeming' ? 'uncertain_redemption' : 'uncertain_request');
+      if (!claimed && error?.name === 'OperationJournalError' && error.code === 'JOURNAL_BUSY') reject('JOURNAL_BUSY');
       throw error;
     }
   }

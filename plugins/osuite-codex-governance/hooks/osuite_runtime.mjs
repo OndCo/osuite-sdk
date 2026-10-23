@@ -141,15 +141,21 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 var MAX_STATE_BYTES = 2 * 1024 * 1024;
+var MAX_STATE_CHECKS = 3;
 function checkedFile(filename) {
-  try {
-    const stat = fs.lstatSync(filename);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error("Unsafe runtime state file");
-    return stat;
-  } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
+  for (let attempt = 0; attempt < MAX_STATE_CHECKS; attempt++) {
+    try {
+      const stat = fs.lstatSync(filename);
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Unsafe runtime state file");
+      if (stat.nlink === 0) continue;
+      if (stat.nlink !== 1) throw new Error("Unsafe runtime state file");
+      return stat;
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
   }
+  throw new Error("Runtime state changed during inspection");
 }
 function createStateStore(config) {
   const root = path.resolve(config.stateDir || path.join(os.tmpdir(), `osuite-node-${process.getuid?.() ?? "user"}`));
@@ -171,15 +177,20 @@ function createStateStore(config) {
     path: filename,
     read(name) {
       const file = filename(name);
-      if (!checkedFile(file)) return null;
-      const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | fs.constants.O_NONBLOCK);
-      try {
-        const stat = fs.fstatSync(fd);
-        if (!stat.isFile() || stat.nlink !== 1 || stat.size > MAX_STATE_BYTES) throw new Error("Invalid runtime state file");
-        return JSON.parse(fs.readFileSync(fd, "utf8"));
-      } finally {
-        fs.closeSync(fd);
+      for (let attempt = 0; attempt < MAX_STATE_CHECKS; attempt++) {
+        if (!checkedFile(file)) return null;
+        const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | fs.constants.O_NONBLOCK);
+        try {
+          const stat = fs.fstatSync(fd);
+          if (!stat.isFile()) throw new Error("Invalid runtime state file");
+          if (stat.nlink === 0) continue;
+          if (stat.nlink !== 1 || stat.size > MAX_STATE_BYTES) throw new Error("Invalid runtime state file");
+          return JSON.parse(fs.readFileSync(fd, "utf8"));
+        } finally {
+          fs.closeSync(fd);
+        }
       }
+      throw new Error("Runtime state changed during read");
     },
     write(name, value) {
       const file = filename(name);

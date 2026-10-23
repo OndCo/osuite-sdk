@@ -613,7 +613,7 @@ journalTest('schema is versioned, STRICT, WAL and integrity-checked with a finit
   });
   f.open();
   assert.equal(connection.prepare('PRAGMA synchronous').get().synchronous, 2);
-  assert.equal(connection.prepare('PRAGMA busy_timeout').get().timeout, 100);
+  assert.equal(connection.prepare('PRAGMA busy_timeout').get().timeout, 1000);
   assert.equal(connection.prepare('PRAGMA foreign_keys').get().foreign_keys, 1);
   assert.equal(connection.prepare('PRAGMA trusted_schema').get().trusted_schema, 0);
   const pages = connection.prepare('PRAGMA max_page_count').get().max_page_count;
@@ -666,6 +666,32 @@ journalTest('busy operation transactions time out without replay and remain usab
   assert.equal(journal.get(scope, record.operationId).state, 'prepared');
   raw.exec('ROLLBACK');
   assert.equal(journal.claim(scope, record.operationId, ['prepared'], 'requesting', 'owner-2'), true);
+  assert.equal(raw.prepare('SELECT count(*) AS n FROM evidence').get().n, 2);
+});
+
+journalTest('the default lock budget admits a short independent writer without replaying the claim or evidence', async t => {
+  const f = storage(t), journal = f.open();
+  journal.prepare(record);
+  const child = worker(t, `
+    const db = new DatabaseSync(data.path);
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      process.send({ locked: true });
+      await new Promise(resolve => setTimeout(resolve, 300));
+      db.exec('ROLLBACK');
+      return 'released';
+    } finally { db.close(); }
+  `, { path: f.path });
+  const locked = new Promise(resolve => child.child.on('message', message => { if (message.locked) resolve(); }));
+  await child.ready;
+  child.start();
+  await locked;
+  assert.equal(journal.claim(scope, record.operationId, ['prepared'], 'requesting', 'owner-1'), true);
+  assert.equal((await child.finished).result, 'released');
+  const raw = f.raw();
+  assert.equal(raw.prepare('SELECT count(*) AS n FROM evidence').get().n, 2);
+  assert.equal(journal.get(scope, record.operationId).owner, 'owner-1');
+  assert.equal(journal.claim(scope, record.operationId, ['prepared'], 'requesting', 'owner-2'), false);
   assert.equal(raw.prepare('SELECT count(*) AS n FROM evidence').get().n, 2);
 });
 
