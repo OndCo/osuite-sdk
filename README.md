@@ -7,15 +7,14 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-The 2.12.0 source candidate adds the explicit Node 24
+Version 2.12.0 adds the explicit Node 24
 [`osuite/controlled-transfers`](sdk/CONTROLLED_TRANSFERS.md) entry. Its deployment
 qualification is incomplete: the server feature and workspace gates must remain
 closed until separately qualified. It does not enable a Hook, enroll existing
-clients, or provide a bank/blockchain settlement integration. Source availability
-is not proof that this candidate has been published on npm.
+clients, or provide a bank/blockchain settlement integration.
 
-Version 2.11.2 is [published on npm](https://www.npmjs.com/package/osuite/v/2.11.2)
-through the trusted publisher. Its [versioned release](https://github.com/OndCo/osuite-sdk/releases/tag/v2.11.2)
+Version 2.12.0 is [published on npm](https://www.npmjs.com/package/osuite/v/2.12.0)
+through the trusted publisher. Its [versioned release](https://github.com/OndCo/osuite-sdk/releases/tag/v2.12.0)
 includes the same verified archive. `npm view osuite version` reports the current
 registry version; publishing source alone is not proof of npm availability.
 To test this source without replacing a globally installed CLI:
@@ -31,7 +30,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-To connect with the published CLI, use `npx osuite@2.11.2 connect`. A version-pinned
+To connect with the published CLI, use `npx osuite@2.12.0 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
