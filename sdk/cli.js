@@ -145,7 +145,7 @@ function loadDotenvFile(relativePath) {
 
 function loadProjectEnvironment() {
   // Enrollment selects one whole runtime bundle, never a merged global env.
-  if (process.argv[2] === 'connect') return;
+  if (process.argv[2] === 'connect' || CONTROLLED_TRANSFER_CLI) return;
   [...CLI_CREDENTIAL_PATHS, '.env'].forEach((relativePath) => {
     if (process.argv[2] === 'doctor' && !inspectCredentialFile(process.cwd(), relativePath).safe) return;
     loadDotenvFile(relativePath);
@@ -174,6 +174,8 @@ function parseArgs(argv) {
 
 // Hooks run with the agent's environment, not the values this CLI loads from project .env files.
 const SHELL_ENV = { ...process.env };
+const CONTROLLED_TRANSFER_CLI = ['doctor', 'mcp'].includes(process.argv[2])
+  && process.argv.slice(3).some(value => /^--(?:controlled-transfers|require-controlled-transfers)(?:=|$)/.test(value));
 loadProjectEnvironment();
 
 function envValue(name, fallback) {
@@ -729,6 +731,9 @@ function printHelp() {
   write('');
   write(c('Useful commands', ANSI.bold));
   write('  osuite doctor                         Check connection, then run the project hook with a sample call');
+  write('  osuite doctor --controlled-transfers  Read strict profile capabilities only (Node 24; --runtime sdk|mcp)');
+  write('                --require-controlled-transfers is an alias; this does not certify deployment qualification');
+  write('  osuite mcp --controlled-transfers     Three controlled-ledger tools over bounded NDJSON stdio (Node 24)');
   write('  osuite try                            Review one fixed, harmless terminal acknowledgement');
   write('  osuite status                         Ping Studio and show current workspace connection');
   write('  osuite explain "git push origin main" Explain how CAVA/Decision V2 will read a command');
@@ -1183,6 +1188,37 @@ function printExplanation(command) {
   }
 }
 
+async function controlledTransferDiagnosis({ strict = false, runtime = 'sdk' } = {}) {
+  const { probeMatoiStatus, formatMatoiStatus } = await import('./matoiDoctor.mjs');
+  const { loadControlledTransferCliConfig } = await import('./controlled-transfers/cli-config.mjs');
+  let status;
+  try {
+    const config = loadControlledTransferCliConfig({ projectRoot: process.cwd(), shellEnv: SHELL_ENV, runtime });
+    status = await probeMatoiStatus({ config });
+  } catch (error) {
+    status = { ...await probeMatoiStatus(), code: error.code || 'INVALID_CONFIGURATION' };
+  }
+  write(formatMatoiStatus(status));
+  if (strict && !status.configured) process.exitCode = 1;
+  return status.configured === true;
+}
+
+async function controlledTransferCommand(command, args) {
+  const { fail } = await import('./controlled-transfers/contract.mjs');
+  const allowed = command === 'doctor' ? ['_', 'controlled-transfers', 'require-controlled-transfers', 'runtime'] : ['_', 'controlled-transfers'];
+  if (args._.length || Object.keys(args).some(key => !allowed.includes(key))
+    || ['controlled-transfers', 'require-controlled-transfers'].some(key => Object.hasOwn(args, key) && args[key] !== true)
+    || (command === 'mcp' && args['controlled-transfers'] !== true)
+    || (command === 'doctor' && args.runtime !== undefined && !['sdk', 'mcp'].includes(args.runtime))) {
+    fail('INVALID_CONTROLLED_TRANSFER_OPTIONS');
+  }
+  if (command === 'doctor') return controlledTransferDiagnosis({ strict: true, runtime: args.runtime || 'sdk' });
+  const { loadControlledTransferCliConfig } = await import('./controlled-transfers/cli-config.mjs');
+  const { runControlledTransferStdio } = await import('./controlled-transfers-stdio.mjs');
+  const config = loadControlledTransferCliConfig({ projectRoot: process.cwd(), shellEnv: SHELL_ENV, runtime: 'mcp' });
+  if (!await runControlledTransferStdio(config)) process.exitCode = 1;
+}
+
 async function doctor() {
   const config = readConfig();
   let ok = true;
@@ -1246,6 +1282,8 @@ async function doctor() {
   if (!hookChecks.length) writeCheckLine('miss', 'Agent hooks', 'none in this project (fine for SDK and MCP runtimes)');
   const hooksOk = hookChecks.every((check) => check.ok);
 
+  write('');
+  await controlledTransferDiagnosis();
   write('');
   if (!ok || !hooksOk) {
     write(c('Next step', ANSI.bold));
@@ -1775,6 +1813,7 @@ async function main() {
 
   if (['help', '--help', '-h'].includes(command)) return printHelp();
   if (['version', '--version', '-v'].includes(command)) return write(pkg.version);
+  if (CONTROLLED_TRANSFER_CLI) return controlledTransferCommand(command, args);
   if (command === 'doctor') return runDoctorWithMeasurement(doctor, { config: readConfig(), emit: write });
   if (command === 'try') return tryWalkthrough(args);
   if (command === 'status') return status();
@@ -1796,6 +1835,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error?.message || String(error)}\n`);
+  const message = CONTROLLED_TRANSFER_CLI
+    ? /^[A-Z][A-Z0-9_]{0,63}$/.test(error?.code) ? `Matoi ${error.code}` : 'Matoi CONTROLLED_TRANSFER_COMMAND_FAILED'
+    : error?.message || String(error);
+  process.stderr.write(`${message}\n`);
   process.exit(1);
 });

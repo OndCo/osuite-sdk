@@ -7,6 +7,13 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
+The 2.12.0 source candidate adds the explicit Node 24
+[`osuite/controlled-transfers`](sdk/CONTROLLED_TRANSFERS.md) entry. Its deployment
+qualification is incomplete: the server feature and workspace gates must remain
+closed until separately qualified. It does not enable a Hook, enroll existing
+clients, or provide a bank/blockchain settlement integration. Source availability
+is not proof that this candidate has been published on npm.
+
 Version 2.11.2 is [published on npm](https://www.npmjs.com/package/osuite/v/2.11.2)
 through the trusted publisher. Its [versioned release](https://github.com/OndCo/osuite-sdk/releases/tag/v2.11.2)
 includes the same verified archive. `npm view osuite version` reports the current

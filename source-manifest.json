@@ -1,6 +1,19 @@
 {
   "version": 1,
   "scope": "Explicit SDK, Hook and standalone test sources only",
+  "testExclusions": [
+    {
+      "source": "sdk/controlled-transfers/test/client.test.mjs",
+      "tests": [
+        "optional real ZeroGate passes stay signed opaque evidence, never automatic execution authority",
+        "advertised 64-effect native signed status recovers the original preparation above 256 KiB",
+        "signed receipt gate retains the real ZeroGate slow review and binds the selected signed pass",
+        "invalid optional receipt gates stay unknown even when signed by the configured owner",
+        "historical signed gates bind their original pass without attributing a new current effect"
+      ],
+      "reason": "These cases import private cava-core or matoi-runtime packages, directly or through gatedPreparation. Only the standalone Node 24 test:controlled-transfers command excludes them by exact name; the full repository suite still runs every case unchanged. Exported loopback client, rotation, doctor, package and strict CLI tests verify the public contract, not private resource-owner or deployment qualification."
+    }
+  ],
   "files": [
     {
       "path": ".github/workflows/ci.yml",
@@ -47,9 +60,9 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 4004,
+      "size": 4442,
       "mode": 420,
-      "sha256": "cc2589af751ea4b94c914da2479db8e774d9c792b710996e097446c6009b7a91"
+      "sha256": "2cace69591886a3c4806ce6e74fe3386c00f026f5f374cabc8f8176ff0152ca2"
     },
     {
       "path": "RELEASING.md",
@@ -64,6 +77,13 @@
       "size": 821,
       "mode": 420,
       "sha256": "ee88995906e4628aaf66519ae487979c5baf05cadd3e37faeeeda6136e3e7d9f"
+    },
+    {
+      "path": "__tests__/unit/matoi-cli.test.js",
+      "source": "__tests__/unit/matoi-cli.test.js",
+      "size": 20724,
+      "mode": 420,
+      "sha256": "52af1b264784195fdec99056afa6c0b0f2e956909fc958d5e003e2741df6dac3"
     },
     {
       "path": "__tests__/unit/onboarding-try.test.js",
@@ -203,7 +223,7 @@
       "source": "__tests__/unit/sdk-credential-storage.test.js",
       "size": 8273,
       "mode": 420,
-      "sha256": "ffc9e4ddc31121682c343ef0f6182da3eeb9ef5b2704af127a8ca2a832cbe2a6"
+      "sha256": "ce3a3fd04d967a16bc8eaf476acab7244a82c8df83836382474dbc1350e79d1b"
     },
     {
       "path": "__tests__/unit/sdk-cursor-cli.test.js",
@@ -259,14 +279,14 @@
       "source": "scripts/sdk-release/template/package-lock.json",
       "size": 53252,
       "mode": 420,
-      "sha256": "83f378c17c1686b51d8c7f8a229b2a50db2c2ff96a3dddee32f0aa85dd63ffd1"
+      "sha256": "b2e05aac97043303adc02cf80c60389cadf8e5023975e145ec51e6f437fe1754"
     },
     {
       "path": "package.json",
       "source": "scripts/sdk-release/template/package.json",
-      "size": 668,
+      "size": 1363,
       "mode": 420,
-      "sha256": "c038479bf1949a09badf905e35b4f72c462765bb49a1a32e3bc400a41b3f6b79"
+      "sha256": "9652253b846e5e068af0fd356209344eade502d8bc8a886a1a583cee9967f1c0"
     },
     {
       "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
@@ -423,6 +443,13 @@
       "sha256": "b42d9971a5d228f290fca4edf2273e5a61ab52635a30ea8247b2ec0314425546"
     },
     {
+      "path": "sdk/CONTROLLED_TRANSFERS.md",
+      "source": "sdk/CONTROLLED_TRANSFERS.md",
+      "size": 30835,
+      "mode": 420,
+      "sha256": "2ad47b19f74d77fffcd777687f67ebfe317ccbc0fbf393d6adaf0c942f11ef41"
+    },
+    {
       "path": "sdk/GOVERNED_TOOLS.md",
       "source": "sdk/GOVERNED_TOOLS.md",
       "size": 11578,
@@ -453,9 +480,142 @@
     {
       "path": "sdk/cli.js",
       "source": "sdk/cli.js",
-      "size": 82117,
+      "size": 84914,
       "mode": 493,
-      "sha256": "b55c8a6c8143d177d1b5270ba5db8b5f6559957791c0976e4a07f127519f86ff"
+      "sha256": "8b632daf2ff8c393809ceee4dabb83cf137c57b9a133e4f5c51fb1740f339cfe"
+    },
+    {
+      "path": "sdk/controlled-transfers-stdio.mjs",
+      "source": "sdk/controlled-transfers-stdio.mjs",
+      "size": 1790,
+      "mode": 420,
+      "sha256": "3050c1bf96975f15d84ac58d57c191880cac37139b03ded9e59574f026bc8064"
+    },
+    {
+      "path": "sdk/controlled-transfers.mjs",
+      "source": "sdk/controlled-transfers.mjs",
+      "size": 313,
+      "mode": 420,
+      "sha256": "fb58724bbb6900f39159e59a80c3e5d34711bbbec22359fbdee4339ef9d95a8d"
+    },
+    {
+      "path": "sdk/controlled-transfers/cli-config.mjs",
+      "source": "sdk/controlled-transfers/cli-config.mjs",
+      "size": 5313,
+      "mode": 420,
+      "sha256": "4cdd7d67f95587f661d03cc34bae9eb048a73be8ad1706b3b44ea1eb67cd7581"
+    },
+    {
+      "path": "sdk/controlled-transfers/client.mjs",
+      "source": "sdk/controlled-transfers/client.mjs",
+      "size": 21271,
+      "mode": 420,
+      "sha256": "b5a4b677780e9b6765ce214279f58dc48eca227dce74a4b535d954ada86fade2"
+    },
+    {
+      "path": "sdk/controlled-transfers/contract.mjs",
+      "source": "sdk/controlled-transfers/contract.mjs",
+      "size": 9530,
+      "mode": 420,
+      "sha256": "67e96dc20581235d6062af44b99ed2786397f68ea0291dcbbe65224056a8823c"
+    },
+    {
+      "path": "sdk/controlled-transfers/mcp.mjs",
+      "source": "sdk/controlled-transfers/mcp.mjs",
+      "size": 6870,
+      "mode": 420,
+      "sha256": "524d6649119911fba5c65330afc1f0d1826f5c04c705c704d222291709ba56e9"
+    },
+    {
+      "path": "sdk/controlled-transfers/projection.mjs",
+      "source": "sdk/controlled-transfers/projection.mjs",
+      "size": 3459,
+      "mode": 420,
+      "sha256": "8b9ca98966bedd27ac9c60726a1ba4f66f3e28abafe9724ae468f1807df49963"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/client.test.mjs",
+      "source": "sdk/controlled-transfers/test/client.test.mjs",
+      "size": 59966,
+      "mode": 420,
+      "sha256": "35a9d06c4f99391db864719d9cb8ea68eae5681ff00173d9f7743aea7e7a91d4"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/compact-client.test.mjs",
+      "source": "sdk/controlled-transfers/test/compact-client.test.mjs",
+      "size": 28333,
+      "mode": 420,
+      "sha256": "718dee33af699c3bbcf78d54f45c2e01a63d0e275eb45599cf434bc523df05dc"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/compact-contract.test.mjs",
+      "source": "sdk/controlled-transfers/test/compact-contract.test.mjs",
+      "size": 4606,
+      "mode": 420,
+      "sha256": "27a6794df8fff82e852441c7eb43919d9f8a58869ced07e584a7ae5267911d1d"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/compact-fixture.mjs",
+      "source": "sdk/controlled-transfers/test/compact-fixture.mjs",
+      "size": 10660,
+      "mode": 420,
+      "sha256": "c55a3fe3e0bff711e215a979c877a449ab6f2ab3b9c075bc34ca714a6dd0af8d"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/compact-verification.test.mjs",
+      "source": "sdk/controlled-transfers/test/compact-verification.test.mjs",
+      "size": 20071,
+      "mode": 420,
+      "sha256": "f57b1cdd06659ff893c4911bb238393fe0d97502c08583f36e521b369f079b7d"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/doctor.test.mjs",
+      "source": "sdk/controlled-transfers/test/doctor.test.mjs",
+      "size": 7329,
+      "mode": 420,
+      "sha256": "52fb982f9c3180620d4ac8c036bcc8219ad0883385bdee8e7f9800a768085817"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/package.test.mjs",
+      "source": "sdk/controlled-transfers/test/package.test.mjs",
+      "size": 3527,
+      "mode": 420,
+      "sha256": "4c0c1dee9aa56b7bcf16c5c9c99e22be064668bb91c23b561127b039f8aee673"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/projection.test.mjs",
+      "source": "sdk/controlled-transfers/test/projection.test.mjs",
+      "size": 26114,
+      "mode": 420,
+      "sha256": "6fa3b273921b224b2d9dbe1956018e495462e81dd289d169db3d82a140122ef3"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/retention-fixture.mjs",
+      "source": "sdk/controlled-transfers/test/retention-fixture.mjs",
+      "size": 7189,
+      "mode": 420,
+      "sha256": "98e4101f591ba2beee36171897046ec7770a407c1d96d9422b5b3d60ae2b5f17"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/retention.test.mjs",
+      "source": "sdk/controlled-transfers/test/retention.test.mjs",
+      "size": 12416,
+      "mode": 420,
+      "sha256": "aa82a56b5a05bfdbecd305a5bdd10b7ac06861d216fe5618abe1e1a16a42780d"
+    },
+    {
+      "path": "sdk/controlled-transfers/test/rotation.test.mjs",
+      "source": "sdk/controlled-transfers/test/rotation.test.mjs",
+      "size": 7005,
+      "mode": 420,
+      "sha256": "a0171844d7139cc36196124de66ffdc7b6c1fe25fd9e413d19854758ab3c52ab"
+    },
+    {
+      "path": "sdk/controlled-transfers/verification.mjs",
+      "source": "sdk/controlled-transfers/verification.mjs",
+      "size": 12099,
+      "mode": 420,
+      "sha256": "013eaf5b723727c8f37a150ffdcbd1c737d25e651d29dd664cd3a708eb8b98b6"
     },
     {
       "path": "sdk/credentials.js",
@@ -605,6 +765,13 @@
       "sha256": "e3da84a07564db9b3281e893b8bf8226a43a567e5ad77a7d93e7d55b2230d394"
     },
     {
+      "path": "sdk/matoiDoctor.mjs",
+      "source": "sdk/matoiDoctor.mjs",
+      "size": 2699,
+      "mode": 420,
+      "sha256": "6509fd1f429baa20ed6c56ae9fca326f9b1db1da250c4394f21537f47c891133"
+    },
+    {
       "path": "sdk/osuite.js",
       "source": "sdk/osuite.js",
       "size": 17173,
@@ -614,9 +781,9 @@
     {
       "path": "sdk/package.json",
       "source": "sdk/package.json",
-      "size": 1511,
+      "size": 1753,
       "mode": 420,
-      "sha256": "26428431c199873182676c781c8b26c4ae18101cd4a1755676c455c400f74918"
+      "sha256": "33512f588616b81768c0210d3debc0ab90151217924063b0a2f4c741ffe45f29"
     },
     {
       "path": "sdk/projectHooks.js",

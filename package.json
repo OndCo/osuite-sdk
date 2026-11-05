@@ -1,14 +1,15 @@
 {
   "name": "osuite-sdk-source",
-  "version": "2.11.2",
+  "version": "2.12.0",
   "private": true,
   "type": "module",
   "description": "Standalone OSuite SDK and Hook source verification",
   "license": "MIT",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --exclude __tests__/unit/matoi-cli.test.js",
     "test:compat": "node --test tests/compat.test.mjs",
-    "test:governed-tools": "node --test sdk/governed-tools/test/*.test.mjs",
+    "test:governed-tools": "node --test sdk/governed-tools/test/*.test.mjs && npm run test:controlled-transfers",
+    "test:controlled-transfers": "node --test --test-skip-pattern='^(optional real ZeroGate passes stay signed opaque evidence, never automatic execution authority|advertised 64-effect native signed status recovers the original preparation above 256 KiB|signed receipt gate retains the real ZeroGate slow review and binds the selected signed pass|invalid optional receipt gates stay unknown even when signed by the configured owner|historical signed gates bind their original pass without attributing a new current effect)$' sdk/controlled-transfers/test/*.test.mjs && vitest run __tests__/unit/matoi-cli.test.js",
     "verify:source": "node scripts/verify-source.mjs",
     "build:plugin": "node plugins/osuite-codex-governance/hooks/build-node-runtime.mjs",
     "pack:sdk": "node scripts/pack-sdk.mjs"

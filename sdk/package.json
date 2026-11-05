@@ -1,6 +1,6 @@
 {
   "name": "osuite",
-  "version": "2.11.2",
+  "version": "2.12.0",
   "description": "OSuite governed action SDK for AI agents. Approve, replay, prove, and verify runtime decisions.",
   "type": "module",
   "publishConfig": {
@@ -22,6 +22,9 @@
     },
     "./governed-tools": {
       "import": "./governed-tools.mjs"
+    },
+    "./controlled-transfers": {
+      "import": "./controlled-transfers.mjs"
     }
   },
   "files": [
@@ -36,6 +39,11 @@
     "governed-tools/*.mjs",
     "governed-tools/examples/*.mjs",
     "GOVERNED_TOOLS.md",
+    "controlled-transfers.mjs",
+    "controlled-transfers-stdio.mjs",
+    "controlled-transfers/*.mjs",
+    "CONTROLLED_TRANSFERS.md",
+    "matoiDoctor.mjs",
     "projectHooks.js",
     "reviewSurface.js",
     "osuite.js",
