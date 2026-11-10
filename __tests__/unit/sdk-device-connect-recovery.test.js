@@ -170,6 +170,9 @@ describe('CLI acknowledgement and recovery', () => {
       expect(result.stdout + result.stderr).not.toContain('synthetic-new-key');
       expect(result.stdout + result.stderr).not.toContain('synthetic-new-private-key');
       expect(result.stdout + result.stderr).not.toContain('synthetic-ack-token');
+      expect(result.stdout).toContain('osuite doctor --runtime sdk');
+      expect(result.stdout).not.toContain('project hook lane');
+      expect(result.stdout).not.toContain('Run osuite doctor, then');
     });
   });
 

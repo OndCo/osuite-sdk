@@ -99,8 +99,8 @@ function maybeStat(path) {
   catch (error) { if (error.code === 'ENOENT') return null; throw error; }
 }
 
-function checkFile(stat) {
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1
+function checkFile(stat, expectedLinks = 1) {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== expectedLinks
     || stat.uid !== process.getuid() || (stat.mode & 0o077)) fail('JOURNAL_PERMISSIONS');
 }
 
@@ -258,7 +258,13 @@ export class OperationJournal {
     const current = privateDirectory(this.#directory.path, false);
     if (!sameFile(current.stat, this.#directory.stat)) fail('JOURNAL_PERMISSIONS');
     for (const suffix of ['', '-wal', '-shm', '-journal']) {
-      const stat = maybeStat(`${this.#path}${suffix}`);
+      let stat = maybeStat(`${this.#path}${suffix}`);
+      if (suffix && stat?.nlink === 0) {
+        // SQLite can retire a sidecar during lstat. Recheck once, retaining all
+        // type, ownership and mode checks on both observations.
+        checkFile(stat, 0);
+        stat = maybeStat(`${this.#path}${suffix}`);
+      }
       if (stat) {
         checkFile(stat);
         if (!suffix && this.#file && !sameFile(stat, this.#file)) fail('JOURNAL_PERMISSIONS');

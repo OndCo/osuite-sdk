@@ -7,6 +7,11 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
+The 2.13.0 source candidate adds explicit `doctor --runtime sdk|mcp` connection
+diagnostics and fixes credential-file/recovery handling. Source publication is
+not npm availability. The diagnostic does not execute tools, install a Hook,
+enable controlled transfers or attest a complete customer workflow.
+
 Version 2.12.0 adds the explicit Node 24
 [`osuite/controlled-transfers`](sdk/CONTROLLED_TRANSFERS.md) entry. Its deployment
 qualification is incomplete: the server feature and workspace gates must remain

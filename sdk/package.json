@@ -1,6 +1,6 @@
 {
   "name": "osuite",
-  "version": "2.12.0",
+  "version": "2.13.0",
   "description": "OSuite governed action SDK for AI agents. Approve, replay, prove, and verify runtime decisions.",
   "type": "module",
   "publishConfig": {
@@ -44,6 +44,7 @@
     "controlled-transfers/*.mjs",
     "CONTROLLED_TRANSFERS.md",
     "matoiDoctor.mjs",
+    "nativeDoctor.mjs",
     "projectHooks.js",
     "reviewSurface.js",
     "osuite.js",

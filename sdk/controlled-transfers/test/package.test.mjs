@@ -34,7 +34,7 @@ test('npm pack dry-run contains all new runtime modules and doctor but excludes 
   const files = JSON.parse(result.stdout)[0].files.map(file => file.path);
   for (const file of ['controlled-transfers.mjs', 'controlled-transfers-stdio.mjs', 'controlled-transfers/cli-config.mjs', 'controlled-transfers/client.mjs', 'controlled-transfers/contract.mjs',
     'controlled-transfers/verification.mjs', 'controlled-transfers/mcp.mjs', 'controlled-transfers/projection.mjs',
-    'matoiDoctor.mjs', 'CONTROLLED_TRANSFERS.md', 'runtime/protocol.mjs']) {
+    'matoiDoctor.mjs', 'nativeDoctor.mjs', 'CONTROLLED_TRANSFERS.md', 'runtime/protocol.mjs']) {
     assert.ok(files.includes(file), `packed SDK must include ${file}`);
   }
   assert.ok(!files.some(file => file.startsWith('controlled-transfers/test/')));

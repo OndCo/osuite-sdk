@@ -1,13 +1,15 @@
 # Matoi Controlled Transfers
 
-**Unreleased candidate.** This entry is in the working SDK source, not the
-already published `osuite@2.11.2`. Installing that registry version does not
-provide these APIs. A versioned SDK release and matching server deployment must
-be qualified together before customer rollout.
+**Available starting in `osuite@2.12.0`.** This additive entry is not present in
+`osuite@2.11.2`. Confirm the chosen registry version with
+`npm view osuite@2.12.0 version`. Version 2.12.0 was released with the server profile disabled by default;
+SDK publication does not enroll a workspace or qualify a customer deployment.
+A matching server, explicit operator setup and deployment acceptance are still
+required before customer rollout.
 
 The additive ESM entry `osuite/controlled-transfers` speaks the
 `matoi.controlled-transfer.v1` semantic profile to the resource-owned **controlled ledger**.
-Its default full lease remains v1; this candidate also reads explicitly requested
+Its default full lease remains v1; the SDK also reads explicitly requested
 compact `matoi.controlled-transfer.lease.v2` leases, as described below.
 It requires **Node 24**. The ordinary SDK exports, Hook, runtime requirements,
 installation settings and signing transport are unchanged.
@@ -52,6 +54,18 @@ is complete. Initial ledger balances do not represent an actual bank deposit.
    real Studio review, execute and verify its receipt, then test rejection and
    recovery. Doctor success reports configuration, not deployment certification.
 
+**Fresh self-host operator prerequisite:** a successful local-password dashboard
+login or SDK/MCP enrollment does not itself create a current workspace
+owner/admin membership. Configuration can therefore return
+`403 HUMAN_ADMINISTRATOR_REQUIRED` after those earlier steps succeed. The
+current workspace bootstrap/creation APIs are SaaS-only; the fresh self-host
+first-owner path still needs a documented and qualified provisioning procedure.
+Do not bypass the check, insert an invented reviewer, or mistake a token's admin
+label for membership. Keep the profile disabled until an eligible operator and
+the complete resource-side workflow have been verified. This does not prevent
+ordinary SDK/MCP connection setup, but it prevents claiming this profile is
+turnkey on the local-password-only installation path.
+
 Configuration requests have the following exact fields. Tenant and administrator
 identity come from the authenticated session, never these JSON bodies.
 
@@ -63,13 +77,124 @@ identity come from the authenticated session, never these JSON bodies.
 | `authority` | `grantId`, `active`, and optionally `allowedEffects`, `budgetMinor` | Revoke/reactivate or update current authority without widening the original boundary |
 | `state` | `grantId`, `state` | Update owner-controlled workflow state; relevant changes require reassessment |
 
-The workflow grammar and exact effect example are in the
-[implementation contract](../docs/superpowers/plans/2026-10-31-matoi-controlled-transfer-implementation.md).
 Expiry is an integer Unix time in milliseconds, at most 24 hours ahead; prepared
 leases last at most five minutes and cannot outlive the grant. An operator must
 source each allowed `paymentId` from its business records, not let the agent mint
 new authorized payments. A deployment must also prevent direct access to the
 underlying ledger; this configuration API alone does not prove route coverage.
+
+### Single-Transfer Operator Example
+
+After completing the prerequisites above, use a fresh, owned test ledger for
+this example. From a current owner/admin session, send these **three separate POST requests**
+in order to `/api/matoi/transfers/configuration`, each with
+`Content-Type: application/json`. Keep browser requests same-origin; do not use
+an agent API key or put workspace/administrator identity in the request body.
+
+First initialize storage:
+
+<!-- controlled-transfer-initialize:start -->
+```json
+{"kind":"initialize"}
+```
+<!-- controlled-transfer-initialize:end -->
+
+Then provision the source account with 250 synthetic minor units:
+
+<!-- controlled-transfer-source-account:start -->
+```json
+{
+  "kind": "account", "accountId": "treasury",
+  "asset": "USD", "network": "internal-ledger", "decimals": 2,
+  "balanceMinor": "250", "debitLimitMinor": "250"
+}
+```
+<!-- controlled-transfer-source-account:end -->
+
+Provision the distinct destination account; its zero debit limit permits receipt,
+not spending:
+
+<!-- controlled-transfer-destination-account:start -->
+```json
+{
+  "kind": "account", "accountId": "vendor-a",
+  "asset": "USD", "network": "internal-ledger", "decimals": 2,
+  "balanceMinor": "0", "debitLimitMinor": "0"
+}
+```
+<!-- controlled-transfer-destination-account:end -->
+
+These create new accounts; they are not account resets or top-ups. Do not repeat
+provisioning to restore spent capacity. Do not retry configuration POSTs automatically;
+after a timeout or unclear response, stop and have the operator verify existing
+configuration and audit history before deciding what to do next.
+
+The following JSON is the finite `plan`, not a complete configuration request.
+It needs only one `transfer` node and empty `state`; each operand uses `literal`.
+`allowedEffects` repeats the exact resolved effect with `operation: "transfer"`
+instead of the workflow's `op`. Amounts and budgets are integer strings; decimals
+is an integer. Use an owner-authorized payment ID and change both occurrences
+consistently. Both accounts must match the effect's asset, network and decimals.
+
+<!-- controlled-transfer-plan:start -->
+```json
+{
+  "workflow": {
+    "version": 1,
+    "body": {
+      "op": "transfer",
+      "paymentId": { "literal": "payment-42" },
+      "sourceAccount": { "literal": "treasury" },
+      "destination": { "literal": "vendor-a" },
+      "asset": { "literal": "USD" },
+      "network": { "literal": "internal-ledger" },
+      "amountMinor": { "literal": "250" },
+      "decimals": { "literal": 2 }
+    }
+  },
+  "state": {},
+  "allowedEffects": [{
+    "operation": "transfer", "paymentId": "payment-42",
+    "sourceAccount": "treasury", "destination": "vendor-a",
+    "asset": "USD", "network": "internal-ledger",
+    "amountMinor": "250", "decimals": 2
+  }],
+  "budgetMinor": "250"
+}
+```
+<!-- controlled-transfer-plan:end -->
+
+Parse that JSON as `plan` in your operator script. Set `enrolledAgentId` and
+`enrolledKeyId` to the actual current SDK/MCP enrollment's agent ID and active
+key ID, not invented labels or the raw API-key secret. Construct the grant just
+before sending so `expiresAt` is a fresh numeric Unix-millisecond timestamp,
+strictly in the future and no more than 24 hours ahead of the server clock:
+
+```js
+const grant = {
+  ...plan,
+  kind: 'grant',
+  agent_id: enrolledAgentId,
+  keyId: enrolledKeyId,
+  grantId: 'owner-grant-42',
+  expiresAt: Date.now() + 10 * 60 * 1000,
+};
+```
+
+Send `JSON.stringify(grant)` as one further POST body to the same configuration
+route through the authenticated administrator flow. Registration neither enrolls
+the agent nor approves or executes a payment. Next use the SDK configuration and
+`prepare('invoice-batch-42', 'owner-grant-42')` example below, retain its original
+operation ID/preparation, complete the **real native Studio review** with the
+required eligible people, and only then deliberately request ordinal 0 execution.
+A pending review is not authorization. A lost execution acknowledgement requires
+`status`-only recovery, not an automatic resend or a new operation/payment ID.
+
+One independently confirmed commit changes these fresh balances to treasury `0`
+and vendor-a `250`, with grant spend `250` and one payment receipt. Verify the
+exact effect/receipt and resource state; approval or a derived view alone is not
+completion. This recipe does not complete product qualification, establish
+customer onboarding success, or cover a bank, blockchain or another resource.
 
 ## Configuration
 
@@ -499,9 +624,9 @@ they are not evidence of real financial writes, native Studio review, or
 deployment qualification. Owner/PostgreSQL/live route acceptance is a separate
 integration gate.
 
-## Transport And Rotation In The 2.12.0 Candidate
+## Transport And Rotation Since 2.12.0
 
-The `2.12.0` source candidate is not proof of registry publication or a qualified
+The published `2.12.0` client does not by itself establish a qualified
 server deployment. When fresh capabilities advertise
 `executionTransport: 'bound-reference-v1'`, the execute POST sends the verified
 `preparationDigest` instead of repeating the complete signed `lease`. The client

@@ -164,8 +164,12 @@ export function prepareCredentialFile(projectRoot, relativePath) {
   return target;
 }
 
-export function writeCredentialFile(projectRoot, relativePath, body) {
+export function writeCredentialFile(projectRoot, relativePath, body, options = {}) {
   const target = prepareCredentialFile(projectRoot, relativePath);
+  // Interactive callers must not adopt a newer operator edit at this handoff.
+  if (Object.hasOwn(options, 'expectedStat') && !sameFile(options.expectedStat, target.stat)) {
+    throw new Error('Credential destination changed since it was read; refusing to replace it.');
+  }
   atomicWrite(target, String(body), 0o600, { credential: true });
   return { relativePath: target.relativePath, status: 'written' };
 }

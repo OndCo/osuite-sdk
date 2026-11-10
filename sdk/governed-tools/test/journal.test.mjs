@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import {
   chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync,
   readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync,
@@ -69,6 +71,38 @@ function rejectsCode(fn, code) {
     assert.equal(Object.hasOwn(error, 'cause'), false);
     return true;
   });
+}
+
+function withLstat(t, observe, run) {
+  const original = fs.lstatSync;
+  const mocked = t.mock.method(fs, 'lstatSync', (...args) => observe(original, ...args));
+  syncBuiltinESMExports();
+  try { return run(); }
+  finally { mocked.mock.restore(); syncBuiltinESMExports(); }
+}
+
+function retiredSidecarStat(f, suffix) {
+  const journal = f.open();
+  journal.prepare(record);
+  let fd;
+  try {
+    if (suffix === '-journal') {
+      journal.close();
+      const raw = f.raw();
+      raw.exec('PRAGMA journal_mode=DELETE; BEGIN IMMEDIATE; CREATE TABLE transient_probe(value TEXT);');
+      fd = fs.openSync(f.path + suffix, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      raw.exec('ROLLBACK');
+      raw.close();
+    } else {
+      fd = fs.openSync(f.path + suffix, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      journal.close();
+    }
+    const stat = fs.fstatSync(fd);
+    assert.equal(stat.nlink, 0, 'SQLite must have retired this sidecar');
+    assert.equal(stat.mode & 0o777, 0o600);
+    assert.equal(existsSync(f.path + suffix), false);
+    return stat;
+  } finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
 function enter(journal, state, input = record, owner = 'owner-1') {
@@ -822,6 +856,75 @@ journalTest('database, WAL, SHM and rollback-journal links are rejected even whe
   }
 });
 
+journalTest('startup rechecks an owner-only SQLite sidecar retired during lstat', t => {
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    for (const replacement of ['absent', 'private-file']) {
+      const f = storage(t), retired = retiredSidecarStat(f, suffix), target = f.path + suffix;
+      if (replacement === 'private-file') writeFileSync(target, '', { mode: 0o600 });
+      let reads = 0;
+      // Model the captured lstat race using metadata from an actually unlinked SQLite sidecar.
+      withLstat(t, (original, file, ...args) => {
+        if (file === target && reads++ === 0) return retired;
+        return original(file, ...args);
+      }, () => {
+        const journal = f.open();
+        assert.equal(journal.get(scope, record.operationId).state, 'prepared');
+      });
+      assert.ok(reads >= 2, `${suffix}/${replacement} was not rechecked`);
+      assert.equal(f.raw().prepare('SELECT count(*) AS n FROM evidence').get().n, 1);
+    }
+  }
+});
+
+journalTest('a sidecar recheck still rejects unsafe replacement paths', t => {
+  for (const kind of ['public-file', 'symlink', 'hardlink', 'directory', 'foreign-owner', 'still-unlinked']) {
+    const f = storage(t), retired = retiredSidecarStat(f, '-shm'), target = `${f.path}-shm`;
+    const other = join(f.dir, 'untouched-target');
+    writeFileSync(other, 'must-not-change', { mode: 0o600 });
+    if (kind === 'symlink') symlinkSync(other, target);
+    else if (kind === 'hardlink') linkSync(other, target);
+    else if (kind === 'directory') mkdirSync(target, { mode: 0o700 });
+    else {
+      writeFileSync(target, '', { mode: 0o600 });
+      if (kind === 'public-file') chmodSync(target, 0o644);
+    }
+    let reads = 0;
+    withLstat(t, (original, file, ...args) => {
+      if (file === target) {
+        if (reads++ === 0 || kind === 'still-unlinked') return retired;
+        const stat = original(file, ...args);
+        if (kind === 'foreign-owner') stat.uid = process.getuid() + 1;
+        return stat;
+      }
+      return original(file, ...args);
+    }, () => rejectsCode(() => f.open(), 'JOURNAL_PERMISSIONS'));
+    assert.equal(reads, 2, `${kind} must fail on the single bounded recheck`);
+    assert.equal(readFileSync(other, 'utf8'), 'must-not-change');
+  }
+});
+
+journalTest('unlinked metadata cannot bypass file type, ownership, modes or database identity', t => {
+  for (const kind of ['public-mode', 'foreign-owner', 'symlink', 'directory', 'hardlink', 'database']) {
+    const f = storage(t), retired = retiredSidecarStat(f, '-shm');
+    const target = kind === 'database' ? f.path : `${f.path}-shm`;
+    if (kind !== 'database') writeFileSync(target, '', { mode: 0o600 });
+    const before = readFileSync(f.path);
+    const unsafe = Object.assign(Object.create(Object.getPrototypeOf(retired)), retired);
+    if (kind === 'public-mode') unsafe.mode |= 0o044;
+    if (kind === 'foreign-owner') unsafe.uid = process.getuid() + 1;
+    if (kind === 'symlink') unsafe.mode = 0o120600;
+    if (kind === 'directory') unsafe.mode = 0o040700;
+    if (kind === 'hardlink') unsafe.nlink = 2;
+    let reads = 0;
+    withLstat(t, (original, file, ...args) => {
+      if (file === target) { reads++; return unsafe; }
+      return original(file, ...args);
+    }, () => rejectsCode(() => f.open(), 'JOURNAL_PERMISSIONS'));
+    assert.equal(reads, 1, `${kind} must not be retried`);
+    assert.deepEqual(readFileSync(f.path), before);
+  }
+});
+
 journalTest('user-controlled ancestor symlinks are not followed to create journal directories', t => {
   const f = storage(t);
   const target = join(f.dir, 'real');
@@ -919,32 +1022,34 @@ journalTest('killed request, redemption and dispatch owners cannot be reclaimed 
   }
 });
 
-journalTest('simultaneous child-process first opens converge and exactly one owner claims', async t => {
-  const f = storage(t);
-  const body = `
-    const journal = new OperationJournal(data.path, { busyTimeoutMs: 500 });
-    try {
-      const row = journal.prepare(data.record);
-      const claimed = journal.claim(data.record.scope, data.record.operationId, ['prepared'], 'requesting', data.owner);
-      return { actionId: row.actionId, claimed };
-    } finally { journal.close(); }
-  `;
-  const workers = Array.from({ length: 6 }, (_, index) => worker(t, body, {
-    path: f.path, record, owner: `process-${index}`,
-  }));
-  await Promise.all(workers.map(child => child.ready));
-  workers.forEach(child => child.start());
-  const results = await Promise.all(workers.map(child => child.finished));
-  for (const result of results) {
-    assert.equal(result.code, 0, JSON.stringify(result));
-    assert.equal(result.result.actionId, record.actionId);
-  }
-  assert.equal(results.filter(result => result.result.claimed).length, 1);
-  const journal = f.open();
-  assert.equal(journal.get(scope, record.operationId).state, 'requesting');
-  const raw = f.raw();
-  assert.equal(raw.prepare('SELECT count(*) AS n FROM operations').get().n, 1);
-  assert.equal(raw.prepare('SELECT count(*) AS n FROM evidence').get().n, 2);
+journalTest('20 independent simultaneous six-child first opens each converge to exactly one claim', async t => {
+  for (let attempt = 0; attempt < 20; attempt++) await t.test(`independent start ${attempt + 1}`, async t => {
+    const f = storage(t);
+    const body = `
+      const journal = new OperationJournal(data.path, { busyTimeoutMs: 500 });
+      try {
+        const row = journal.prepare(data.record);
+        const claimed = journal.claim(data.record.scope, data.record.operationId, ['prepared'], 'requesting', data.owner);
+        return { actionId: row.actionId, claimed };
+      } finally { journal.close(); }
+    `;
+    const workers = Array.from({ length: 6 }, (_, index) => worker(t, body, {
+      path: f.path, record, owner: `process-${index}`,
+    }));
+    await Promise.all(workers.map(child => child.ready));
+    workers.forEach(child => child.start());
+    const results = await Promise.all(workers.map(child => child.finished));
+    for (const result of results) {
+      assert.equal(result.code, 0, JSON.stringify(result));
+      assert.equal(result.result.actionId, record.actionId);
+    }
+    assert.equal(results.filter(result => result.result.claimed).length, 1);
+    const journal = f.open();
+    assert.equal(journal.get(scope, record.operationId).state, 'requesting');
+    const raw = f.raw();
+    assert.equal(raw.prepare('SELECT count(*) AS n FROM operations').get().n, 1);
+    assert.equal(raw.prepare('SELECT count(*) AS n FROM evidence').get().n, 2);
+  });
 });
 
 journalTest('cross-process capacity is serialized without deleting the winning operation', async t => {

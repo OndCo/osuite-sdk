@@ -145,7 +145,7 @@ function loadDotenvFile(relativePath) {
 
 function loadProjectEnvironment() {
   // Enrollment selects one whole runtime bundle, never a merged global env.
-  if (process.argv[2] === 'connect' || CONTROLLED_TRANSFER_CLI) return;
+  if (process.argv[2] === 'connect' || CONTROLLED_TRANSFER_CLI || NATIVE_RUNTIME_DOCTOR) return;
   [...CLI_CREDENTIAL_PATHS, '.env'].forEach((relativePath) => {
     if (process.argv[2] === 'doctor' && !inspectCredentialFile(process.cwd(), relativePath).safe) return;
     loadDotenvFile(relativePath);
@@ -176,6 +176,8 @@ function parseArgs(argv) {
 const SHELL_ENV = { ...process.env };
 const CONTROLLED_TRANSFER_CLI = ['doctor', 'mcp'].includes(process.argv[2])
   && process.argv.slice(3).some(value => /^--(?:controlled-transfers|require-controlled-transfers)(?:=|$)/.test(value));
+const NATIVE_RUNTIME_DOCTOR = process.argv[2] === 'doctor'
+  && process.argv.slice(3).some(value => /^--runtime(?:=|$)/.test(value));
 loadProjectEnvironment();
 
 function envValue(name, fallback) {
@@ -731,6 +733,7 @@ function printHelp() {
   write('');
   write(c('Useful commands', ANSI.bold));
   write('  osuite doctor                         Check connection, then run the project hook with a sample call');
+  write('  osuite doctor --runtime sdk|mcp        Check only that native connection; never run project hooks');
   write('  osuite doctor --controlled-transfers  Read strict profile capabilities only (Node 24; --runtime sdk|mcp)');
   write('                --require-controlled-transfers is an alias; this does not certify deployment qualification');
   write('  osuite mcp --controlled-transfers     Three controlled-ledger tools over bounded NDJSON stdio (Node 24)');
@@ -1628,8 +1631,10 @@ async function connectProject(target = 'auto', args = {}) {
   write(opened
     ? '  1. Studio opened in your browser. Check the code matches, then approve this terminal.'
     : '  1. Open the browser handoff URL, check the code matches, then approve this terminal in Studio.');
-  write('  2. OSuite prepares the runtime identity, project hook lane, and signed env for this project.');
-  write('  3. Return here; the CLI will finish automatically and then you can run osuite doctor.');
+  write(PROJECT_BOOTSTRAPS[runtime]
+    ? '  2. OSuite prepares the runtime identity, project hook lane, and signed env for this project.'
+    : '  2. OSuite prepares this signed SDK/MCP connection. No project Hook is installed.');
+  write(`  3. Return here; the CLI will finish automatically and then you can run osuite doctor${PROJECT_BOOTSTRAPS[runtime] ? '' : ` --runtime ${runtime}`}.`);
   write('');
 
   let install = null;
@@ -1697,7 +1702,8 @@ async function connectProject(target = 'auto', args = {}) {
       write(`Saved credentials to ${result.relativePath}`);
       if (!PROJECT_BOOTSTRAPS[runtime]) {
         write(c('Connected to OSuite', ANSI.green));
-        write('  Run osuite doctor, then start the agent from this project root.');
+        write(`  Run osuite doctor --runtime ${runtime} to check this connection without invoking project Hooks.`);
+        write('  Connection readiness is not business-workflow qualification. Integrate and test the actual consequential tool path.');
       } else if (!install?.ok) {
         write(c('Not connected: OSuite hook setup is not ready, so this agent is not governed.', ANSI.red));
         (install?.blockers || []).forEach((blocker) => write(`  ${blocker}`));
@@ -1731,7 +1737,10 @@ async function connectProject(target = 'auto', args = {}) {
 
   write('');
   write(c('API key fallback', ANSI.bold));
-  if (hasApiKey) {
+  if (!PROJECT_BOOTSTRAPS[runtime]) {
+    write('  A raw API key alone is not equivalent to this signed SDK/MCP connection.');
+    write(`  Retain the complete private credential bundle and use osuite doctor --runtime ${runtime}; do not mix credentials from other runtime folders.`);
+  } else if (hasApiKey) {
     write('  OSUITE_API_KEY is already present in this shell or project env. Browser handoff can be skipped for this project.');
   } else if (PROJECT_BOOTSTRAPS[runtime]) {
     write('  If browser handoff is unavailable, supply OSUITE_BASE_URL and OSUITE_API_KEY through your secret manager or process environment.');
@@ -1814,6 +1823,35 @@ async function main() {
   if (['help', '--help', '-h'].includes(command)) return printHelp();
   if (['version', '--version', '-v'].includes(command)) return write(pkg.version);
   if (CONTROLLED_TRANSFER_CLI) return controlledTransferCommand(command, args);
+  if (NATIVE_RUNTIME_DOCTOR) {
+    if (args._.length || !['sdk', 'mcp'].includes(args.runtime) || Object.keys(args).some(key => !['_', 'runtime'].includes(key))) {
+      throw new Error('INVALID_RUNTIME_OPTIONS: use osuite doctor --runtime sdk or mcp');
+    }
+    try {
+      const { diagnoseNativeRuntime } = await import('./nativeDoctor.mjs');
+      const diagnosis = await diagnoseNativeRuntime({ runtime: args.runtime, projectRoot: process.cwd(), shellEnv: SHELL_ENV });
+      write(`Native ${args.runtime} connection configuration and current Studio posture verified.`);
+      write(`Workspace: ${diagnosis.orgId}`);
+      write('No tool was executed. This is not business-workflow qualification or proof of resource enforcement.');
+      write('Integrate the native wrapper, retain business IDs/journal, and verify one real resource outcome next.');
+    } catch (error) {
+      const code = /^[A-Z][A-Z0-9_]+$/.test(error?.code || '') ? error.code : 'DIAGNOSIS_FAILED';
+      write(`Native ${args.runtime} diagnosis: ${code}`);
+      write('Preserve credentials and recovery files.');
+      if (code === 'CONNECTION_RECOVERY_PENDING') {
+        write('If another connect process is running, wait for it to finish.');
+        write('Otherwise, resume your original connect command with the same runtime, agent and explicit --base-url (if originally supplied).');
+      } else if (code === 'MCP_MIGRATION_PENDING') {
+        write('Resume osuite connect mcp --migrate-legacy.');
+        write('If enrollment still needs recovery afterwards, use its original command with the original --base-url (if supplied).');
+      } else {
+        write('Review this diagnostic and your local configuration with the workspace administrator.');
+        write('Do not reconnect or reissue credentials automatically; revoked access requires an explicit authorized decision.');
+      }
+      process.exitCode = 1;
+    }
+    return;
+  }
   if (command === 'doctor') return runDoctorWithMeasurement(doctor, { config: readConfig(), emit: write });
   if (command === 'try') return tryWalkthrough(args);
   if (command === 'status') return status();

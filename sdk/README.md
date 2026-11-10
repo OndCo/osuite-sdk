@@ -1,4 +1,4 @@
-# OSuite SDK (v2.11.2)
+# OSuite SDK (v2.13.0)
 
 **Governed action SDK for AI agents.**
 
@@ -25,8 +25,8 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-For this version, use `npx osuite@2.11.2 connect` only after confirming availability
-with `npm view osuite@2.11.2 version`. A source checkout or this document alone
+For this version, use `npx osuite@2.13.0 connect` only after confirming availability
+with `npm view osuite@2.13.0 version`. A source checkout or this document alone
 does not establish registry publication, and npm's `latest` may differ from the
 checked-out version. The stable credential-recovery behavior and the new
 native-call operation journal are different mechanisms.
@@ -588,6 +588,22 @@ Preserve historical records and signing keys instead of reassigning past actions
 to the replacement. A client-side installation ID is not permission to rotate.
 
 ### SDK and MCP Credential Separation (Since 2.10.2)
+
+For SDK/MCP integration, connect the explicit runtime rather than relying on
+local-agent auto-detection. A raw workspace key does not supply the full signed
+connection required by `osuite/governed-tools`.
+
+Version 2.13.0 adds `osuite doctor --runtime sdk` and
+`osuite doctor --runtime mcp`. These inspect only the selected credential bundle
+and current Studio posture, report its workspace, and do not run project Hooks
+or tools. They are **not available in the published 2.12.0 CLI**. Check the exact
+2.13.0 registry version before using these commands with an npm installation.
+Do not use bare `doctor` or `try` to validate a particular SDK/MCP lane when
+several runtime configurations coexist: the legacy commands use merged config.
+
+A diagnostic success is not approval of a business operation, proof of resource
+mediation, or a completed integration. Keep a stable business ID and private
+journal, and verify the actual resource-side outcome through your wrapped path.
 
 SDK connections use `.osuite/.env`; MCP connections use `.osuite/mcp/.env`.
 Their installation metadata and recovery journals live beside their respective

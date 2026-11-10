@@ -1,7 +1,7 @@
 # Native Tool Compatibility And Recovery
 
 This opt-in API is introduced in 2.11.0; it is not part of 2.10.2. Confirm the
-chosen version with `npm view osuite@2.11.2 version` before installing. A source
+chosen version with `npm view osuite@2.12.0 version` before installing. A source
 checkout alone does not establish npm availability or server compatibility;
 consult the verified release record before enabling it for a workspace.
 
