@@ -60,9 +60,9 @@
     {
       "path": "README.md",
       "source": "scripts/sdk-release/template/README.md",
-      "size": 4654,
+      "size": 5400,
       "mode": 420,
-      "sha256": "738019145f13e8a12e5bb610a65468a8de68bda7b9ca8f1ee1a8d12d09a1d857"
+      "sha256": "1b97bb2a983a30fd0a54dbb3ef38c537773db098488680241c748a5cd715fa6f"
     },
     {
       "path": "RELEASING.md",

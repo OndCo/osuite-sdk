@@ -7,10 +7,28 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-The 2.13.0 source candidate adds explicit `doctor --runtime sdk|mcp` connection
-diagnostics and fixes credential-file/recovery handling. Source publication is
-not npm availability. The diagnostic does not execute tools, install a Hook,
-enable controlled transfers or attest a complete customer workflow.
+Version 2.13.0 is [published on npm](https://www.npmjs.com/package/osuite/v/2.13.0)
+through the trusted publisher. It adds explicit `doctor --runtime sdk|mcp`
+connection diagnostics and fixes credential-file/recovery handling. The
+diagnostic does not execute tools, install a Hook, enable controlled transfers
+or attest a complete customer workflow.
+
+For hosted Studio, install Node.js and Git on the client, then run from the
+project you intend to connect. You do not need to install the Studio server.
+Select SDK or MCP explicitly; these paths do not install local hooks:
+
+```sh
+npx osuite@2.13.0 connect sdk
+npx osuite@2.13.0 doctor --runtime sdk
+# For an MCP connection instead:
+npx osuite@2.13.0 connect mcp
+npx osuite@2.13.0 doctor --runtime mcp
+```
+
+Finish Studio approval and return to the original terminal for delivery and
+acknowledgement. Preserve recovery files and the original project/runtime;
+approval alone does not mean the connection is ready. Native-tool wrappers
+still require Node 24/POSIX, a trusted mapping and a durable journal.
 
 Version 2.12.0 adds the explicit Node 24
 [`osuite/controlled-transfers`](sdk/CONTROLLED_TRANSFERS.md) entry. Its deployment
@@ -35,7 +53,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-To connect with the published CLI, use `npx osuite@2.12.0 connect`. A version-pinned
+For optional local-agent setup, use `npx osuite@2.13.0 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
