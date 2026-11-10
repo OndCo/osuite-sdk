@@ -1,11 +1,12 @@
 class Osuite < Formula
   desc "Governed action SDK and runtime hooks for AI agents"
   homepage "https://ond.cc/osuite"
-  url "https://github.com/OndCo/osuite-sdk/releases/download/v2.12.0/osuite-2.12.0.tgz"
-  sha256 "c1790d98d66d76f3098c424123eeaeab231dc82a92c55cb40c6d60e001a94883"
+  url "https://github.com/OndCo/osuite-sdk/releases/download/v2.13.0/osuite-2.13.0.tgz"
+  sha256 "98807e101bdd5ac20c38f6dd8d28b99b6a92baa75bc230f1fa099d814d3001c4"
   license "MIT"
 
   depends_on "node"
+  depends_on "git"
 
   def install
     libexec.install Dir["*"]
