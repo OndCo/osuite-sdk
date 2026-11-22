@@ -96,6 +96,37 @@ is current client configuration, not a resource capability or proof that every
 unsigned request to the server is prohibited. Actual signed action responses
 and fresh admission are checked separately.
 
+### Choose The Intended Configuration Scope
+
+Device enrollment and a tool/provider connection are different records. An
+enrolled SDK identity does not by itself create an `agent_connections` entry.
+Administrative posture writes to `/api/runtimes/sdk/posture` use these targets:
+
+| POST target fields | Intended scope |
+| --- | --- |
+| Neither `agent_id` nor `provider` | Workspace SDK defaults. |
+| `agent_id`, without `provider` | That agent's SDK posture. |
+| Both `agent_id` and `provider: sdk` | An existing provider connection's SDK override. |
+
+Only an authorized administrator may write posture. A device credential's
+ability to read effective posture is not permission to manage it. Read the
+current complete posture before an intended update, retain its other fields,
+and re-read the effective configuration afterward. Do not silently broaden a
+connection-targeted update to agent or workspace scope after a 404.
+
+An SDK read with `agent_id` and `provider=sdk` inherits the agent posture when no
+connection override exists. Check `scope`, `source` and `targeting`, rather than
+inferring writable scope from a successful GET. `Connection not found for posture
+override` means the selected connection write target was absent, not that the
+agent-scoped route is necessarily unavailable.
+
+POST and GET revision hashes do not currently share an identical input shape:
+GET also includes rollout-negotiation metadata. Different target tuples also
+change the revision. Check each response against its own declared scope and
+content; do not treat POST/GET hash inequality alone as a failed write. A required
+capability that this wrapper cannot satisfy must still stop execution; reducing
+that requirement is an administrator's policy decision, not an SDK recovery step.
+
 ## Connected MCP Client
 
 ```js
@@ -182,6 +213,42 @@ Outcome reporting is separate. If Studio loses the reporting acknowledgement,
 the native result remains the return value and `reportState` is `uncertain`.
 Do not replay the tool to repair a report. `close()` prevents new work; an
 already-started native call is allowed to record its outcome before SQLite closes.
+
+### Read Status At The Correct Layer
+
+Do not collapse the following fields into one business-success flag:
+
+| Observation | Meaning | Does not establish |
+| --- | --- | --- |
+| Local `state: completed` | The wrapper observed a native return without its error flag. | Independent resource verification, settlement or retention of the full result. |
+| Local `state: uncertain` | The operation is fenced without a confirmed native outcome; the callback may not have run. | Failure, rollback or permission to resend. |
+| `reportState: confirmed` | Studio acknowledged the wrapper's outcome report. | Successful business execution. An uncertainty report can itself be confirmed. |
+| `remote.status: failed` with local `uncertain` | The SDK reports native uncertainty using this lifecycle label with `observation: outcome_unknown`; neither business failure nor reporting failure follows from the label. | Proof that the external resource did not commit. |
+| Authorized resource readback | Evidence about the resource's recorded operation and effect. | A new execution grant or an automatic transition of the SDK journal to completed. |
+
+For example, a resource can commit and then lose its acknowledgement. The native
+callback throws, the SDK retains `uncertain`, and Studio may show `failed` with
+an `osuite.native_tool_observation.v1` summary whose observation is
+`outcome_unknown`. A confirmed report of that uncertainty is consistent with a
+real resource commit. `status()` is read-only; restarting the adapter does not
+resolve this disagreement or authorize redispatch.
+Inspect `output_summary` through an authorized action read; SDK `status()` does
+not expose that summary.
+
+An application recovery procedure should preserve the original operation ID,
+scope and journal, read SDK status, then use its existing authenticated resource
+status interface. Check the tenant/resource identity, business operation ID,
+target and relevant arguments or commitments against the original job. Missing,
+ambiguous or mismatched evidence remains unknown. Even `not_found` may reflect
+an incomplete index or an in-flight request, not proof of non-execution. Display
+a verified resource result separately from local execution and reporting state;
+do not edit the SDK journal, manufacture a receipt, or rerun the callback to make
+the labels agree. This release has no general resource-reconciliation callback
+that automatically converts an arbitrary tool's uncertain result to completed.
+Version 2.14.0 adds an explicit host-selected `recover()` path for bindings with
+a preinstalled trusted resource adapter. It preserves the uncertain parent and
+uses a separately authorized recovery child; it does not change ordinary
+`run()` or `status()`. See [Evidence-bound native recovery](GOVERNED_RECOVERY.md).
 
 Use an owner-only directory and a durable local filesystem. Unsafe ownership,
 permissions, symlinks/hardlinks and invalid database paths are rejected. SQLite

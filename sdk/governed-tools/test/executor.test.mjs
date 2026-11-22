@@ -44,7 +44,7 @@ test('same arguments with different operation IDs are separate intended work', a
   await f.tools.run('append-1', params(), f.write);
   await f.tools.run('append-2', params(), f.write);
   assert.equal(f.counts.writes, 2); assert.equal(f.counts.creates, 2);
-  assert.equal(new Set([...f.actions.values()].map(a => a.runtime_session_id)).size, 2);
+  assert.equal(new Set([...f.actions.values()].map(a => a.action_envelope.runtime_session_id)).size, 2);
 });
 
 test('transient configuration-cache contention rereads authority without repeating any action or native call', async t => {

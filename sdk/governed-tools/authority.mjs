@@ -53,7 +53,8 @@ export function createStudioAuthority(config, journalPath) {
   }
 
   async function admit(invocation, journal, owner, aborted) {
-    const record = journal.get(invocation.record.scope, invocation.record.operationId);
+    const record = { ...journal.get(invocation.record.scope, invocation.record.operationId),
+      ...(invocation.recovery ? { recovery: invocation.recovery } : {}) };
     const phase = record.state === 'held' ? 'redeeming' : 'requesting';
     const { api, effective } = await current(aborted);
     if (aborted()) reject('ABORTED');
@@ -99,7 +100,8 @@ export function createStudioAuthority(config, journalPath) {
             { actionId: record.actionId, fingerprint: record.fingerprint }).authorized);
         },
       });
-      if (result.authorized) return { phase, receivedAt, response: result.response };
+      if (result.authorized) return { phase, receivedAt, response: result.response,
+        ruleExpiresAt: result.ruleRolloutBinding?.expires_at ?? null };
       if (result.reason === 'policy_block') {
         if (!claimed) claim();
         settle('denied'); reject('POLICY_DENIED');
@@ -123,7 +125,8 @@ export function createStudioAuthority(config, journalPath) {
       timestamp_end: new Date().toISOString(),
       output_summary: JSON.stringify({ schema_version: 'osuite.native_tool_observation.v1',
         observation: state === 'completed' ? 'native_return' : 'outcome_unknown',
-        result_digest: resultDigest, result_retained: false, independent_resource_verification: false }),
+        result_digest: resultDigest, result_retained: false, independent_resource_verification: false,
+        ...(record.recovery ? { recovery: record.recovery, recovery_evidence_digest: record.errorCode?.slice('recovery_'.length) ?? null } : {}) }),
       ...(state === 'uncertain' ? { error_message: 'Native call outcome is uncertain; no automatic resend.' } : {}),
     });
     return response.ok && matchesStoredAction(response.body, record, config)

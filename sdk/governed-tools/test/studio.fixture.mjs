@@ -61,9 +61,15 @@ export async function studioFixture() {
       } else if (!action) {
         counts.creates++;
         if (control.decision === 'hold') counts.reviews++;
-        action = { ...body, org_id: config.orgId, verified: true,
+        // Match the persisted action projection, not an echo of request-only
+        // digests/session fields. Studio retains those bindings in the envelope.
+        action = { action_id: body.action_id, agent_id: body.agent_id, action_type: body.action_type,
+          declared_goal: body.declared_goal, input_summary: body.input_summary, org_id: config.orgId, verified: true,
           status: control.decision === 'hold' ? 'pending_approval' : 'running',
-          action_envelope: { runtime_session_id: body.runtime_session_id, cava: { fingerprint: sha256(body.tool_input_digest) } },
+          action_envelope: { schema_version: 'osuite.action_envelope.v1', action_id: body.action_id,
+            org_id: config.orgId, agent_id: body.agent_id, runtime_session_id: body.runtime_session_id,
+            tool_use_id: body.tool_use_id, input_summary: body.input_summary,
+            cava: { fingerprint: sha256(body.tool_input_digest) } },
           timestamp_end: null, approval_redeemed_at: null };
         actions.set(body.action_id, action);
       } else if (action.status !== 'pending_approval') return send(res, 409, { error: 'duplicate' });

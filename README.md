@@ -7,6 +7,13 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
+The 2.14.0 source adds explicit
+[evidence-bound native recovery](sdk/GOVERNED_RECOVERY.md) on Node 24/POSIX.
+It requires an application-owned resource adapter installed before the original
+call and fresh authorization. It does not silently retry ordinary tool calls or
+guarantee exactly-once effects for arbitrary resources. Confirm availability with
+`npm view osuite@2.14.0 version`; a source release alone is not npm publication.
+
 Version 2.13.0 is [published on npm](https://www.npmjs.com/package/osuite/v/2.13.0)
 through the trusted publisher. It adds explicit `doctor --runtime sdk|mcp`
 connection diagnostics and fixes credential-file/recovery handling. The

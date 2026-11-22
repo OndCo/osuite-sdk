@@ -114,7 +114,8 @@ function describe(binding, args) {
       || item.some(entry => typeof entry !== 'string' || entry.length > 500))) reject('INVALID_MAPPING');
   }
   if (value.input_summary !== undefined && (!value.input_summary || Array.isArray(value.input_summary)
-    || typeof value.input_summary !== 'object' || Object.hasOwn(value.input_summary, 'osuite_native_call'))) reject('INVALID_MAPPING');
+    || typeof value.input_summary !== 'object' || Object.hasOwn(value.input_summary, 'osuite_native_call')
+    || Object.hasOwn(value.input_summary, 'osuite_native_recovery'))) reject('INVALID_MAPPING');
   return value;
 }
 
@@ -131,7 +132,9 @@ export function makeInvocation({ config, namespace, bindings, operationId, param
   // The historical Hook helper normalizes null to {}. Native calls must retain
   // every JSON value exactly, including that distinction.
   const inputDigest = sha256(canonicalJson({ tool_name: native.name, tool_input: native.arguments }));
-  const bindingDigest = sha256(canonicalJson({ name: native.name, revision: binding.revision, description }));
+  const bindingDigest = sha256(canonicalJson({ name: native.name, revision: binding.revision, description,
+    ...(binding.recovery ? { recovery: { revision: binding.recovery.revision,
+      resourceId: binding.recovery.resourceId, contract: binding.recovery.contract } } : {}) }));
   const identity = sha256(canonicalJson([scope, operationId]));
   const actionId = `act_${identity}`, sessionId = `sess_${identity}`, toolUseId = `tool_${identity}`;
   const marker = { schema_version: CALL_SCHEMA, operation_digest: sha256(operationId), input_digest: inputDigest, binding_digest: bindingDigest };
@@ -144,18 +147,30 @@ export function makeInvocation({ config, namespace, bindings, operationId, param
     inputDigest, bindingDigest, contextDigest: sha256(canonicalJson(context)), actionId, sessionId, toolUseId }) });
 }
 
+function matchesStoredSummary(value, record) {
+  const summary = typeof value === 'string' ? JSON.parse(value) : value;
+  const marker = summary?.osuite_native_call;
+  return marker?.schema_version === CALL_SCHEMA && marker.operation_digest === sha256(record.operationId)
+    && marker.input_digest === record.inputDigest && marker.binding_digest === record.bindingDigest
+    && (!record.recovery || canonicalJson(summary.osuite_native_recovery) === canonicalJson(record.recovery));
+}
+
 export function matchesStoredAction(payload, record, config) {
   try {
     const action = payload?.action || payload;
-    const summary = typeof action?.input_summary === 'string' ? JSON.parse(action.input_summary) : action?.input_summary;
-    const marker = summary?.osuite_native_call;
     const envelope = action?.action_envelope;
+    // Studio persists the signed call marker in both summaries, not a direct
+    // tool_input_digest column. An optional echo must agree; it cannot replace
+    // either mandatory v1 marker or select a less strict contract profile.
     return action?.action_id === record.actionId && action.agent_id === config.agentId
       && action.org_id === config.orgId && action.verified === true
+      && (!Object.hasOwn(action, 'tool_input_digest') || action.tool_input_digest === record.inputDigest)
       && (!payload.action_id || payload.action_id === record.actionId)
-      && envelope?.runtime_session_id === record.sessionId
-      && marker?.schema_version === CALL_SCHEMA && marker.operation_digest === sha256(record.operationId)
-      && marker.input_digest === record.inputDigest && marker.binding_digest === record.bindingDigest;
+      && envelope?.schema_version === 'osuite.action_envelope.v1'
+      && envelope.action_id === record.actionId && envelope.org_id === config.orgId && envelope.agent_id === config.agentId
+      && envelope.runtime_session_id === record.sessionId && envelope.tool_use_id === record.toolUseId
+      && (!Object.hasOwn(envelope, 'tool_input_digest') || envelope.tool_input_digest === record.inputDigest)
+      && matchesStoredSummary(action.input_summary, record) && matchesStoredSummary(envelope.input_summary, record);
   } catch { return false; }
 }
 

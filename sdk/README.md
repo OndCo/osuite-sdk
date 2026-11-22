@@ -1,4 +1,4 @@
-# OSuite SDK (v2.13.0)
+# OSuite SDK (v2.14.0)
 
 **Governed action SDK for AI agents.**
 
@@ -7,6 +7,12 @@ The OSuite SDK helps teams route approvals, record governed decisions, and produ
 The opt-in Node 24 `osuite/governed-tools` entry preserves native tool calls
 and adds durable approval recovery. See [Native Tool Compatibility](GOVERNED_TOOLS.md).
 It was introduced in 2.11.0 and does not enable Hook or a gateway.
+
+Version 2.14.0 adds explicit [evidence-bound native recovery](GOVERNED_RECOVERY.md).
+With a trusted resource adapter installed before execution, applications can
+recover a settled uncertain call under fresh authorization and the original
+business ID. Ordinary calls still never automatically resend an uncertain
+effect. Arbitrary resources and append-only ambiguity are not made exactly-once.
 
 ## Installation
 
@@ -25,8 +31,8 @@ node /absolute/path/to/osuite-sdk/sdk/cli.js doctor
 node /absolute/path/to/osuite-sdk/sdk/cli.js try
 ```
 
-For this version, use `npx osuite@2.13.0 connect` only after confirming availability
-with `npm view osuite@2.13.0 version`. A source checkout or this document alone
+For this version, use `npx osuite@2.14.0 connect` only after confirming availability
+with `npm view osuite@2.14.0 version`. A source checkout or this document alone
 does not establish registry publication, and npm's `latest` may differ from the
 checked-out version. The stable credential-recovery behavior and the new
 native-call operation journal are different mechanisms.

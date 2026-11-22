@@ -95,3 +95,85 @@ test('persisted record contains commitments rather than private arguments or des
   assert.equal(JSON.stringify(input.record).includes('Append a ledger record'), false);
   assert.equal(JSON.parse(input.context.input_summary).osuite_native_call.input_digest, input.record.inputDigest);
 });
+
+async function storedInvocation() {
+  const { makeInvocation } = await contract();
+  const invocation = makeInvocation({ config, namespace: 'billing', bindings, operationId: 'payment-1',
+    params: { name: 'ledger.append', arguments: { target: 'ledger-A', amount: 3 } } });
+  const { record, context } = invocation;
+  // actions.repository persists input_summary and the v1 envelope, but not the
+  // request's top-level tool_input_digest/runtime_session_id/tool_use_id fields.
+  const action = { action_id: record.actionId, org_id: config.orgId, agent_id: config.agentId,
+    verified: true, input_summary: context.input_summary,
+    action_envelope: { schema_version: 'osuite.action_envelope.v1', action_id: record.actionId,
+      org_id: config.orgId, agent_id: config.agentId, runtime_session_id: record.sessionId,
+      tool_use_id: record.toolUseId, input_summary: context.input_summary } };
+  return { record, action };
+}
+
+test('stored v1 action binds mandatory persisted markers without request-only digest echoes', async () => {
+  const { matchesStoredAction } = await contract();
+  const { record, action } = await storedInvocation();
+  assert.equal(Object.hasOwn(action, 'tool_input_digest'), false);
+  assert.equal(Object.hasOwn(action.action_envelope, 'tool_input_digest'), false);
+  assert.equal(matchesStoredAction({ action }, record, config), true);
+  action.tool_input_digest = record.inputDigest;
+  action.action_envelope.tool_input_digest = record.inputDigest;
+  assert.equal(matchesStoredAction({ action }, record, config), true);
+});
+
+for (const location of ['action', 'envelope']) {
+  for (const change of ['wrong', null, undefined]) test(`stored ${location} contradictory digest duplicate ${change} is rejected`, async () => {
+    const { matchesStoredAction } = await contract();
+    const { record, action } = await storedInvocation();
+    action.tool_input_digest = record.inputDigest;
+    const value = location === 'action' ? action : action.action_envelope;
+    value.tool_input_digest = change;
+    assert.equal(matchesStoredAction({ action }, record, config), false);
+  });
+  for (const field of ['schema_version', 'operation_digest', 'input_digest', 'binding_digest']) {
+    for (const change of ['wrong', 'missing', null]) test(`stored ${location} marker ${field} ${change} cannot use a matching digest echo`, async () => {
+      const { matchesStoredAction } = await contract();
+      const { record, action } = await storedInvocation();
+      action.tool_input_digest = record.inputDigest;
+      const value = location === 'action' ? action : action.action_envelope;
+      const summary = JSON.parse(value.input_summary);
+      if (change === 'missing') delete summary.osuite_native_call[field];
+      else summary.osuite_native_call[field] = change;
+      value.input_summary = JSON.stringify(summary);
+      assert.equal(matchesStoredAction({ action }, record, config), false);
+    });
+  }
+  for (const summary of ['{}', 'null', 'invalid-json', null, undefined]) test(`stored ${location} missing/malformed summary ${summary} is rejected`, async () => {
+    const { matchesStoredAction } = await contract();
+    const { record, action } = await storedInvocation();
+    action.tool_input_digest = record.inputDigest;
+    const value = location === 'action' ? action : action.action_envelope;
+    value.input_summary = summary;
+    assert.equal(matchesStoredAction({ action }, record, config), false);
+  });
+  test(`stored ${location} recovery linkage cannot borrow the other summary's valid parent`, async () => {
+    const { matchesStoredAction } = await contract();
+    const { record, action } = await storedInvocation();
+    action.tool_input_digest = record.inputDigest;
+    const recovery = { schema_version: 'osuite.native_recovery.v1', parent_action_id: 'parent' };
+    const recoveryRecord = { ...record, recovery };
+    const summary = { ...JSON.parse(action.input_summary), osuite_native_recovery: recovery };
+    action.input_summary = action.action_envelope.input_summary = JSON.stringify(summary);
+    assert.equal(matchesStoredAction({ action }, recoveryRecord, config), true);
+    const value = location === 'action' ? action : action.action_envelope;
+    value.input_summary = JSON.stringify({ ...summary, osuite_native_recovery: { ...recovery, parent_action_id: 'other' } });
+    assert.equal(matchesStoredAction({ action }, recoveryRecord, config), false);
+  });
+}
+
+for (const field of ['schema_version', 'action_id', 'org_id', 'agent_id', 'runtime_session_id', 'tool_use_id']) {
+  for (const change of ['wrong', 'missing']) test(`stored envelope ${field} ${change} is rejected without another profile fallback`, async () => {
+    const { matchesStoredAction } = await contract();
+    const { record, action } = await storedInvocation();
+    action.tool_input_digest = record.inputDigest;
+    if (change === 'missing') delete action.action_envelope[field];
+    else action.action_envelope[field] = change;
+    assert.equal(matchesStoredAction({ action }, record, config), false);
+  });
+}

@@ -264,8 +264,12 @@ test('four concurrent different-ID children complete identical calls with exactl
   assert.equal(new Set(outcomes.map(outcome => outcome.status.actionId)).size, 4);
   assert.equal(new Set(outcomes.map(outcome => outcome.status.reviewUrl)).size, 4);
   assert.equal(f.actions.size, 4);
-  assert.equal(new Set([...f.actions.values()].map(action => action.runtime_session_id)).size, 4);
-  assert.equal(new Set([...f.actions.values()].map(action => action.tool_input_digest)).size, 1);
+  assert.equal(new Set([...f.actions.values()].map(action => action.action_envelope.runtime_session_id)).size, 4);
+  assert.equal(new Set([...f.actions.values()].map(action => JSON.parse(action.input_summary).osuite_native_call.input_digest)).size, 1);
+  for (const action of f.actions.values()) {
+    assert.match(JSON.parse(action.input_summary).osuite_native_call.input_digest, /^[a-f0-9]{64}$/);
+    assert.equal(Object.hasOwn(action, 'tool_input_digest'), false);
+  }
   assert.deepEqual(executionCounts(f.counts), {
     guard: 4, actionPosts: 4, creates: 4, reviews: 0, reports: 4, writes: 4, invalidSignatures: 0,
   });
@@ -350,9 +354,12 @@ test('a held child returns AWAITING_APPROVAL and a different child redeems the s
   assert.equal(completed.status.reportState, 'confirmed');
   assertSameOperation(completed.status, held.status);
   const actionAfter = f.actions.get(held.status.actionId);
-  for (const key of ['action_id', 'runtime_session_id', 'tool_use_id', 'tool_input_digest', 'input_summary']) {
+  for (const key of ['action_id', 'input_summary']) {
     assert.equal(actionAfter[key], actionBefore[key], `the original action's ${key} must remain bound`);
   }
+  assert.deepEqual(actionAfter.action_envelope, actionBefore.action_envelope);
+  assert.match(JSON.parse(actionAfter.input_summary).osuite_native_call.input_digest, /^[a-f0-9]{64}$/);
+  assert.equal(Object.hasOwn(actionAfter, 'tool_input_digest'), false);
   assert.equal(actionAfter.status, 'completed');
   assert.equal(typeof actionAfter.approval_redeemed_at, 'string');
   assert.equal(f.actions.size, 1);
