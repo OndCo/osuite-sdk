@@ -7,7 +7,9 @@ application, customer records, credentials or unrelated research source.
 
 ## Start
 
-The 2.14.0 source adds explicit
+Version 2.14.0 is [published on npm](https://www.npmjs.com/package/osuite/v/2.14.0)
+through the trusted publisher, with verified registry signature and provenance.
+It adds explicit
 [evidence-bound native recovery](sdk/GOVERNED_RECOVERY.md) on Node 24/POSIX.
 It requires an application-owned resource adapter installed before the original
 call and fresh authorization. It does not silently retry ordinary tool calls or
@@ -25,11 +27,11 @@ project you intend to connect. You do not need to install the Studio server.
 Select SDK or MCP explicitly; these paths do not install local hooks:
 
 ```sh
-npx osuite@2.13.0 connect sdk
-npx osuite@2.13.0 doctor --runtime sdk
+npx osuite@2.14.0 connect sdk
+npx osuite@2.14.0 doctor --runtime sdk
 # For an MCP connection instead:
-npx osuite@2.13.0 connect mcp
-npx osuite@2.13.0 doctor --runtime mcp
+npx osuite@2.14.0 connect mcp
+npx osuite@2.14.0 doctor --runtime mcp
 ```
 
 Finish Studio approval and return to the original terminal for delivery and
@@ -60,7 +62,7 @@ Studio approval. The harmless `try` walkthrough needs a signed-in human review;
 it does not execute an arbitrary shell command. Existing disabled/custom hooks
 are preserved. Do not interpret a direct diagnostic as proof of full host coverage.
 
-For optional local-agent setup, use `npx osuite@2.13.0 connect`. A version-pinned
+For optional local-agent setup, use `npx osuite@2.14.0 connect`. A version-pinned
 Homebrew formula is documented in [release instructions](RELEASING.md). A formula
 in this repository is an Ond-maintained tap, not Homebrew core endorsement.
 
