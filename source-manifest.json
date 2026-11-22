@@ -256,9 +256,9 @@
     {
       "path": "__tests__/unit/sdk-multidevice-enrollment.test.js",
       "source": "__tests__/unit/sdk-multidevice-enrollment.test.js",
-      "size": 4257,
+      "size": 4338,
       "mode": 420,
-      "sha256": "201f2c9a47c85b86f669857b301bbe40fdc009a2e4bd50d5fe4f77b21ff3235e"
+      "sha256": "95cd925fb45ec8a5e4477f0f330cbded5eb1cb80f665e46910e55676f0601eb2"
     },
     {
       "path": "__tests__/unit/sdk-native-doctor.test.js",

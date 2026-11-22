@@ -63,7 +63,8 @@ describe('real CLI process enrollment isolation', () => {
         expect(request.previous_key).toBeUndefined();
       }
     });
-  }, 30000);
+  // Twenty sequential process startups on shared CI; not a CLI latency target.
+  }, 120000);
 
   it('resumes a first-install pending journal without minting a different identity', async () => {
     await withPendingServer(async (url, requests) => {
