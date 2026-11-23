@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify:source
+      - run: node --test tests/release-authorization.test.mjs
       - run: npm test
       - run: npm run test:compat
       - name: Verify opt-in native tools on their qualified runtime

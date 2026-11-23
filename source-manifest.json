@@ -18,16 +18,16 @@
     {
       "path": ".github/workflows/ci.yml",
       "source": "scripts/sdk-release/template/.github/workflows/ci.yml",
-      "size": 1297,
+      "size": 1359,
       "mode": 420,
-      "sha256": "cd1ede886d2c5896bc0b966e9bf771e7c8a72e53cc34e5a73542e274b55d2bdd"
+      "sha256": "65b866a119e3883a5686ea48a69b2085d02d24a0e503656bdf207e7ee7ec43ce"
     },
     {
       "path": ".github/workflows/publish.yml",
       "source": "scripts/sdk-release/template/.github/workflows/publish.yml",
-      "size": 1511,
+      "size": 4865,
       "mode": 420,
-      "sha256": "b8a7a5f07601cd4d5ac13552c3616389eb581a10ac4a463de39f3e78fadc528d"
+      "sha256": "b11ac2c722dd08debd20284a7f4701ffc52b19a7c3db8a0be9b26344b800d471"
     },
     {
       "path": ".gitignore",
@@ -67,9 +67,9 @@
     {
       "path": "RELEASING.md",
       "source": "scripts/sdk-release/template/RELEASING.md",
-      "size": 3132,
+      "size": 4583,
       "mode": 420,
-      "sha256": "b2f56d09d68e094e20b0bfee6a4486e61489a49eb14927b762f2fea34a22b869"
+      "sha256": "4847e58518bb658609418cf3a238dc31818cd16de700599d6304ced24df62c8c"
     },
     {
       "path": "SECURITY.md",
@@ -441,6 +441,13 @@
       "size": 617,
       "mode": 420,
       "sha256": "66cd49cfde0cd3d4dd7a28004f3b595ae6d9e82d141e5f356320638e75a28b53"
+    },
+    {
+      "path": "scripts/release-authorization.mjs",
+      "source": "scripts/sdk-release/template/scripts/release-authorization.mjs",
+      "size": 5076,
+      "mode": 420,
+      "sha256": "913950a56e95b2029dc7937fb9912fb7a39ac6efdfc771a089dabd67277adcd0"
     },
     {
       "path": "scripts/verify-source.mjs",
@@ -959,6 +966,13 @@
       "size": 5805,
       "mode": 420,
       "sha256": "efe780924ddad6b6691977549956be9b79cbca4c0b8d403fd7d8ef956f67a115"
+    },
+    {
+      "path": "tests/release-authorization.test.mjs",
+      "source": "scripts/sdk-release/template/tests/release-authorization.test.mjs",
+      "size": 7517,
+      "mode": 420,
+      "sha256": "0c99785c1103957d58261aecee1aab4477866a88c2579a8c453810edec22e412"
     },
     {
       "path": "vitest.config.mjs",
