@@ -30,7 +30,10 @@ function recoveryGuidance(code, state) {
   else if (['requesting', 'redeeming', 'dispatching', 'uncertain', 'uncertain_request', 'uncertain_redemption'].includes(state)) nextStep = 'reconcile_without_resend';
   else if (!code && state === 'prepared') nextStep = 'check_current_authority';
   else nextStep = 'inspect_configuration';
-  return Object.freeze({ nextStep, preserveOperationId: true, message: recoveryMessages[nextStep] });
+  const message = code === 'RECOVERY_UNSUPPORTED' && state === 'uncertain'
+    ? 'No resource recovery contract was installed for this call. Keep the same operation ID and reconcile against the original receipt. An empty lookup is not permission to resend.'
+    : recoveryMessages[nextStep];
+  return Object.freeze({ nextStep, preserveOperationId: true, message });
 }
 
 export class GovernedToolError extends Error {

@@ -10,6 +10,14 @@ Ordinary `run()` and `status()` never invoke a recovery adapter or retry an
 uncertain native call. Recovery is an explicit host application decision, not an
 agent-supplied permission flag. All errors retain `retryAutomatically: false`.
 
+When a known uncertain call has no adapter, `recover()` returns
+`RECOVERY_UNSUPPORTED` with the matching parent's local state, action ID,
+replay URL and no-resend guidance. It does not contact Studio, inspect the
+resource, or create a child. A different input or binding conflicts without
+returning the original record. An unused ID creates no record. An authoritative
+empty status is only a point-in-time observation, not a guarantee that another
+writer cannot commit after the read.
+
 ## Trust boundary
 
 The developer installs a trusted, versioned adapter on a tool binding **before

@@ -333,6 +333,12 @@ export class OperationJournal {
     return this.#db.prepare('SELECT * FROM operations WHERE scope=? AND operation_id=?').get(scope, operationId);
   }
 
+  #boundRow(value) {
+    const row = this.#read(value.scope, value.operationId);
+    if (row && Object.entries(FIELDS).some(([field, column]) => value[field] !== row[column])) fail('CONFLICT');
+    return row;
+  }
+
   #row(row) {
     if (!row) return null;
     return Object.freeze({
@@ -353,11 +359,8 @@ export class OperationJournal {
     return this.#run(() => {
       const value = validateRecord(record);
       return this.#transaction(() => {
-        const prior = this.#read(value.scope, value.operationId);
-        if (prior) {
-          if (Object.entries(FIELDS).some(([field, column]) => value[field] !== prior[column])) fail('CONFLICT');
-          return this.#row(prior);
-        }
+        const prior = this.#boundRow(value);
+        if (prior) return this.#row(prior);
         if (this.#db.prepare('SELECT count(*) AS n FROM operations').get().n >= this.#maxOperations) fail('JOURNAL_CAPACITY');
         const now = Date.now();
         this.#db.prepare(`INSERT INTO operations(scope,operation_id,input_digest,context_digest,binding_digest,
@@ -376,6 +379,10 @@ export class OperationJournal {
       identity(scope, operationId);
       return this.#row(this.#read(scope, operationId));
     });
+  }
+
+  getBound(record) {
+    return this.#run(() => this.#row(this.#boundRow(validateRecord(record))));
   }
 
   claim(scope, operationId, fromStates, nextState, owner) {

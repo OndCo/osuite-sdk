@@ -216,10 +216,9 @@ export function createGovernedTools({ config: rawConfig, namespace, journalPath,
         const settings = runOptions(options);
         if (settings.aborted()) reject('ABORTED');
         const adapter = bindings[parent.params.name].recovery;
-        if (!adapter) reject('RECOVERY_UNSUPPORTED');
-        const record = local(operationId);
+        const record = journal.getBound(parent.record);
+        if (!adapter) reject('RECOVERY_UNSUPPORTED', status(record));
         if (!record) reject('RECOVERY_UNAVAILABLE');
-        journal.prepare(parent.record); // Compare every stored identity without replacing the parent.
         if (record.state !== 'uncertain') { stopForState(record); reject('RECOVERY_UNAVAILABLE', status(record)); }
         const { invocation, request } = makeRecoveryInvocation(parent, adapter);
         try {

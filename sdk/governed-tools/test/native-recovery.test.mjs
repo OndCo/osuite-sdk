@@ -102,6 +102,53 @@ test('native transport errors and absence of an adapter are not recovery evidenc
   assert.equal(f.resource.calls, 1);
 });
 
+test('unsupported recovery gives the exact uncertain parent and no-resend guidance even after restart', async t => {
+  const f = await setup(t);
+  const { revision, describe } = f.bindings['benchmark.invoke'];
+  const bindings = { 'benchmark.invoke': { revision, describe } };
+  const first = f.open({ bindings });
+  await assert.rejects(first.run(operationId, params(), f.original), { code: 'OUTCOME_UNKNOWN' });
+  const parent = await first.status(operationId);
+  first.close();
+  const reopened = f.open({ bindings }), before = { ...f.counts };
+  await assert.rejects(reopened.recover(operationId, params()), error => {
+    assert.equal(error.code, 'RECOVERY_UNSUPPORTED');
+    assert.equal(error.status?.state, 'uncertain');
+    assert.equal(error.status.actionId, parent.actionId);
+    assert.equal(error.status.replayUrl, parent.replayUrl);
+    assert.equal(error.status.operationId, operationId);
+    assert.equal(error.recovery.nextStep, 'reconcile_without_resend');
+    assert.match(error.message, /empty lookup/i);
+    assert.equal(error.retryAutomatically, false);
+    return true;
+  });
+  assert.deepEqual(f.counts, before);
+  assert.equal(f.resource.calls, 1);
+  assert.equal(f.resource.observations, 0);
+  assert.equal(Object.hasOwn(await reopened.status(operationId), 'recoveryAttempt'), false);
+  const db = new DatabaseSync(f.journalPath, { readOnly: true });
+  try { assert.equal(db.prepare('SELECT count(*) AS n FROM operations').get().n, 1); }
+  finally { db.close(); }
+});
+
+test('unsupported recovery never creates a journal record or returns status for a different binding', async t => {
+  const f = await setup(t);
+  const { revision, describe } = f.bindings['benchmark.invoke'];
+  const bindings = { 'benchmark.invoke': { revision, describe } };
+  const client = f.open({ bindings });
+  await assert.rejects(client.recover(operationId, params()), { code: 'RECOVERY_UNSUPPORTED', status: null });
+  assert.equal(await client.status(operationId), null);
+  await assert.rejects(client.run(operationId, params(), f.original), { code: 'OUTCOME_UNKNOWN' });
+  const before = { ...f.counts };
+  const altered = params();
+  altered.arguments.arguments.amount++;
+  await assert.rejects(client.recover(operationId, altered), { code: 'CONFLICT', status: null });
+  const changed = f.open({ bindings: { 'benchmark.invoke': { revision: 'changed', describe } } });
+  await assert.rejects(changed.recover(operationId, params()), { code: 'CONFLICT', status: null });
+  assert.deepEqual(f.counts, before);
+  assert.equal(f.resource.calls, 1);
+});
+
 test('changed arguments, mapping, adapter contract or identity cannot borrow an uncertain operation', async t => {
   const f = await setup(t); await uncertain(f);
   const changed = params(); changed.arguments.arguments.amount++;

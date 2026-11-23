@@ -223,7 +223,7 @@
       "source": "__tests__/unit/sdk-credential-storage.test.js",
       "size": 8273,
       "mode": 420,
-      "sha256": "35c32a2ad1c2bd24eae2ed39ed4585cb1a09faf11d7c21d75619e4102424d5ea"
+      "sha256": "3d5a09ae3ef1af02b2962740b516c754747b5848c6eca2a4e84a9278de870344"
     },
     {
       "path": "__tests__/unit/sdk-cursor-cli.test.js",
@@ -286,14 +286,14 @@
       "source": "scripts/sdk-release/template/package-lock.json",
       "size": 53252,
       "mode": 420,
-      "sha256": "76bf176556d7e114214322be6f6ffa7ba8d8918247c82868aee04f836ec23808"
+      "sha256": "461b9158b908af9a3849ece4ce913af60cd4bfcfa5fd67b422276000394c82f1"
     },
     {
       "path": "package.json",
       "source": "scripts/sdk-release/template/package.json",
       "size": 1363,
       "mode": 420,
-      "sha256": "29d4fe3b9ee1da5b67eb63790d68354a7550ec7d2aceecd1b839b714c4f55994"
+      "sha256": "966a6e7161927aa7ba94f3e19ca50ad61d017d4f70fa3f9872c557bd2a2481f5"
     },
     {
       "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
@@ -459,9 +459,9 @@
     {
       "path": "sdk/GOVERNED_RECOVERY.md",
       "source": "sdk/GOVERNED_RECOVERY.md",
-      "size": 13336,
+      "size": 13822,
       "mode": 420,
-      "sha256": "50c11904c91a4c1e8063355b28a28c934d7d1fd725767bb4f5bb78b87aef88df"
+      "sha256": "8ec45aa258e290947c1870a8738b23c84274c8c1dabe100f89ae9539982f8ea6"
     },
     {
       "path": "sdk/GOVERNED_TOOLS.md",
@@ -655,9 +655,9 @@
     {
       "path": "sdk/governed-tools/contract.mjs",
       "source": "sdk/governed-tools/contract.mjs",
-      "size": 12495,
+      "size": 12759,
       "mode": 420,
-      "sha256": "5d870eea69213e67d08fbf05a84cb95799d5c4d97d39eb5673ae6e3a1ce053cf"
+      "sha256": "c57abcfb05087d5166a9e0ef4d3a317bb74539cc16001c826420120e5d0d8b5d"
     },
     {
       "path": "sdk/governed-tools/examples/native-client.mjs",
@@ -669,16 +669,16 @@
     {
       "path": "sdk/governed-tools/executor.mjs",
       "source": "sdk/governed-tools/executor.mjs",
-      "size": 16539,
+      "size": 16465,
       "mode": 420,
-      "sha256": "4756226202320951201df5a2cd797e10c7da9d7bd855317a618b1d91816f9b94"
+      "sha256": "964d9c7a85c6e90f8ee5b35225c06a8e0f0eb847f335dce595de16c99dca0e68"
     },
     {
       "path": "sdk/governed-tools/journal.mjs",
       "source": "sdk/governed-tools/journal.mjs",
-      "size": 21607,
+      "size": 21770,
       "mode": 420,
-      "sha256": "4f9103af929ac1aa544ef29874edbafbff35c16b1ecc9590af8992cf6ccd1859"
+      "sha256": "aa1afd928d7769a97e262bde96224671c385d511afefdd07fa1d8403218d1e4d"
     },
     {
       "path": "sdk/governed-tools/mcp.mjs",
@@ -746,9 +746,9 @@
     {
       "path": "sdk/governed-tools/test/native-recovery.test.mjs",
       "source": "sdk/governed-tools/test/native-recovery.test.mjs",
-      "size": 31326,
+      "size": 33881,
       "mode": 420,
-      "sha256": "180fba25dd310dc6152dc214bab6a242274d122293315e40e83355c28e1ec7b9"
+      "sha256": "6b392c6a2e1819e8f6fd18b6c5d6d2adab3c62d88b63fd80823d33af287fc1f1"
     },
     {
       "path": "sdk/governed-tools/test/process-recovery.child.mjs",
@@ -839,7 +839,7 @@
       "source": "sdk/package.json",
       "size": 1805,
       "mode": 420,
-      "sha256": "4c16972afa5b4dccd9dcc18d33ce03840b7ce331addb981919e27673b31cea24"
+      "sha256": "8d310cd3b7e369d371825ae30564a5ecd240f28323e80768b53351d599bc94f0"
     },
     {
       "path": "sdk/projectHooks.js",

@@ -1,6 +1,6 @@
 {
   "name": "osuite",
-  "version": "2.14.0",
+  "version": "2.14.1",
   "description": "OSuite governed action SDK for AI agents. Approve, replay, prove, and verify runtime decisions.",
   "type": "module",
   "publishConfig": {
