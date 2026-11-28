@@ -78,6 +78,7 @@ export async function studioFixture() {
         approval: { state: action.approved_by ? 'approved' : action.status === 'pending_approval' ? 'pending' : 'not_required', reused } };
       if (control.mutate) control.mutate(response);
       if (control.drop === (reused ? 'redemption' : 'create')) { res.destroy(); return; }
+      if (control.sendReceipt) return control.sendReceipt(res, reused ? 200 : 201, response);
       return send(res, reused ? 200 : 201, response);
     }
     if (url.pathname.startsWith('/api/actions/')) {

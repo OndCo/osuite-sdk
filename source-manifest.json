@@ -137,9 +137,9 @@
     {
       "path": "__tests__/unit/runtime-node-git.test.js",
       "source": "__tests__/unit/runtime-node-git.test.js",
-      "size": 3981,
+      "size": 4661,
       "mode": 420,
-      "sha256": "f6957783d4525feaf834ad2f41e37ddb1cceca7792908fb78d6bacbb391f3b41"
+      "sha256": "0e68529e32dd194eb14809dd6ef06be9b3eec930904a287159a6eea427fca661"
     },
     {
       "path": "__tests__/unit/runtime-node-hook.test.js",
@@ -223,7 +223,7 @@
       "source": "__tests__/unit/sdk-credential-storage.test.js",
       "size": 8273,
       "mode": 420,
-      "sha256": "3d5a09ae3ef1af02b2962740b516c754747b5848c6eca2a4e84a9278de870344"
+      "sha256": "b750221cd743d8c7fa0bc40116c1de805ab23c24fb63afbd891bcbee44ca14c0"
     },
     {
       "path": "__tests__/unit/sdk-cursor-cli.test.js",
@@ -286,14 +286,14 @@
       "source": "scripts/sdk-release/template/package-lock.json",
       "size": 53252,
       "mode": 420,
-      "sha256": "461b9158b908af9a3849ece4ce913af60cd4bfcfa5fd67b422276000394c82f1"
+      "sha256": "e41a8cef07ff8f0bd0a3cfee52ec1b734f8bed14d9c2921922d7013a9cffbfa0"
     },
     {
       "path": "package.json",
       "source": "scripts/sdk-release/template/package.json",
       "size": 1363,
       "mode": 420,
-      "sha256": "966a6e7161927aa7ba94f3e19ca50ad61d017d4f70fa3f9872c557bd2a2481f5"
+      "sha256": "0de9a087b868d746071e24a804a2aba484ef57f0030bd1763fe55336090c7537"
     },
     {
       "path": "plugins/osuite-codex-governance/.codex-plugin/plugin.json",
@@ -354,9 +354,9 @@
     {
       "path": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
       "source": "plugins/osuite-codex-governance/hooks/osuite_runtime.mjs",
-      "size": 108093,
+      "size": 108809,
       "mode": 420,
-      "sha256": "43933a539bd5ff0dbcf5d16266be9588d2e71855cd87e3733d1ec43d3268eff7"
+      "sha256": "dac38c4d32db1dfd339ea9abf61581e279a6909551276b387e19464dcde91e7e"
     },
     {
       "path": "plugins/osuite-codex-governance/hooks/osuite_session.mjs",
@@ -655,9 +655,9 @@
     {
       "path": "sdk/governed-tools/authority.mjs",
       "source": "sdk/governed-tools/authority.mjs",
-      "size": 8115,
+      "size": 8329,
       "mode": 420,
-      "sha256": "10930309ebe991ec89d989ec64401bc35c872f788367b7bcede9dd7517ba559c"
+      "sha256": "8436280262ff2de759953716b8aab154fbd3eda8a73110ba894428a4192e04ca"
     },
     {
       "path": "sdk/governed-tools/contract.mjs",
@@ -676,9 +676,9 @@
     {
       "path": "sdk/governed-tools/executor.mjs",
       "source": "sdk/governed-tools/executor.mjs",
-      "size": 16465,
+      "size": 16724,
       "mode": 420,
-      "sha256": "964d9c7a85c6e90f8ee5b35225c06a8e0f0eb847f335dce595de16c99dca0e68"
+      "sha256": "840031ba02532f9273537b77bd77c98682ee3ea23f6a57f7311393c9948dc916"
     },
     {
       "path": "sdk/governed-tools/journal.mjs",
@@ -779,11 +779,18 @@
       "sha256": "a033299c916c8a299b99d77469f5419f6de07651cefe10a8150b6f447f375fe8"
     },
     {
+      "path": "sdk/governed-tools/test/receipt-deadline.test.mjs",
+      "source": "sdk/governed-tools/test/receipt-deadline.test.mjs",
+      "size": 2667,
+      "mode": 420,
+      "sha256": "d5a6f349dfd7f50f354435d33b25b3cb404bb4d613c674ca68b5d40dbfdbdf7f"
+    },
+    {
       "path": "sdk/governed-tools/test/studio.fixture.mjs",
       "source": "sdk/governed-tools/test/studio.fixture.mjs",
-      "size": 7851,
+      "size": 7945,
       "mode": 420,
-      "sha256": "50bb584a0a8d8558bbec5710c74a40ea7949e6a42894c230e214249b02f14cf0"
+      "sha256": "d551208a9c3e6e8d992108d2cb1ce43194617edfc6be53a6ff33ef5589ae828b"
     },
     {
       "path": "sdk/index.cjs",
@@ -846,7 +853,7 @@
       "source": "sdk/package.json",
       "size": 1805,
       "mode": 420,
-      "sha256": "8d310cd3b7e369d371825ae30564a5ecd240f28323e80768b53351d599bc94f0"
+      "sha256": "807cf66d7459b9ca28d14c2d66707dbc53a73320380fafe09594ab067211a2a6"
     },
     {
       "path": "sdk/projectHooks.js",
@@ -928,9 +935,9 @@
     {
       "path": "sdk/runtime/protocol.mjs",
       "source": "sdk/runtime/protocol.mjs",
-      "size": 6384,
+      "size": 7209,
       "mode": 420,
-      "sha256": "e9b7f13e2c3e380d28b8edb9f9e5481c6a5c2e94ac2eeda83fb9de9adc18a8c0"
+      "sha256": "5b83e0ba7b17fcbd7843c4a61d71fa1179012e50f8086be3404452c9a0e61e5c"
     },
     {
       "path": "sdk/runtime/shell.mjs",

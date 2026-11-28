@@ -77,7 +77,10 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
         }
       }
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(options.timeoutMs ?? timeoutMs, 30000)));
+      const totalMs = Math.max(1, Math.min(options.timeoutMs ?? timeoutMs, 30000));
+      const headMs = Math.max(1, Math.min(options.headersTimeoutMs ?? totalMs, totalMs));
+      const started = performance.now();
+      let timer = setTimeout(() => controller.abort(), headMs);
       let status = 0;
       try {
         const response = await fetchImpl(baseUrl + endpoint, {
@@ -88,6 +91,16 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
           ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
         });
         status = response.status;
+        if (headMs < totalMs) {
+          const elapsed = performance.now() - started;
+          if (controller.signal.aborted || elapsed >= headMs) {
+            controller.abort();
+            return { ok: false, status, error: 'timeout' };
+          }
+          // A timely header buys only the remainder of the original total, never a fresh timeout per chunk.
+          clearTimeout(timer);
+          timer = setTimeout(() => controller.abort(), Math.max(1, totalMs - elapsed));
+        }
         if (status < 200 || status >= 300) {
           await response.body?.cancel();
           return { ok: false, status, error: 'http_error' };
@@ -109,6 +122,9 @@ export function createApiClient(config, { fetchImpl = globalThis.fetch, timeoutM
         let parsed;
         try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); } catch {
           return { ok: false, status, error: 'invalid_response' };
+        }
+        if (headMs < totalMs && (controller.signal.aborted || performance.now() - started >= totalMs)) {
+          return { ok: false, status, error: 'timeout' };
         }
         if (!isObject(parsed)) return { ok: false, status, error: 'invalid_response' };
         return { ok: true, status, body: parsed };

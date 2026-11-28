@@ -2,14 +2,21 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildActionContext } from '../../sdk/runtime/context.mjs';
 
 const roots = [];
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+});
 const config = { host: 'codex', agentId: 'agent-test', runtimeId: 'codex_hooks', mode: 'enforce' };
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'osuite-node-git-')); roots.push(root);
+  // The collector and fixture writer must see the same synthetic repository configuration.
+  for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_NAMESPACE', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS']) vi.stubEnv(key, undefined);
+  vi.stubEnv('GIT_CONFIG_GLOBAL', path.join(root, 'absent'));
+  vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(root, 'absent') } }).trim();
   git('init', '-b', 'main');
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--allow-empty', '-m', 'isolated test fixture');
@@ -22,6 +29,12 @@ async function module() {
 }
 
 describe('Node Git publication exact-action binding', () => {
+  it('declines immutable publication evidence in a process with injected Git configuration', async () => {
+    const { collectGitPublication } = await module();
+    const { root } = fixture();
+    vi.stubEnv('GIT_CONFIG_COUNT', '1');
+    expect(collectGitPublication('git push origin main', root)).toBeNull();
+  });
   it('collects actual local repository and immutable commit evidence without pushing', async () => {
     const { collectGitPublication } = await module();
     const { root, git } = fixture();

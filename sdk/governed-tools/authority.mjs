@@ -6,6 +6,8 @@ import { createStateStore } from '../runtime/state.mjs';
 import { admitAction, actionAdmission, cavaFingerprint } from '../runtime/admission.mjs';
 import { matchesStoredAction, reject } from './contract.mjs';
 
+const receiptWindow = Object.freeze({ headersTimeoutMs: 2500, timeoutMs: 5000 });
+
 export function createStudioAuthority(config, journalPath) {
   const responseLimits = { maxResponseBytes: 1048576 };
   const baseApi = createApiClient(config, responseLimits);
@@ -46,7 +48,7 @@ export function createStudioAuthority(config, journalPath) {
   }
 
   async function read(record) {
-    const response = await baseApi.request('GET', `/api/actions/${encodeURIComponent(record.actionId)}`);
+    const response = await baseApi.request('GET', `/api/actions/${encodeURIComponent(record.actionId)}`, undefined, receiptWindow);
     if (!response.ok) return { available: false, status: response.status };
     if (!matchesStoredAction(response.body, record, config)) return { available: false, status: response.status, mismatch: true };
     return { available: true, body: response.body, action: response.body.action || response.body };
@@ -67,7 +69,7 @@ export function createStudioAuthority(config, journalPath) {
     if (!session.ok || actualSession?.runtime_session_id !== record.sessionId
         || actualSession?.org_id !== config.orgId || actualSession?.agent_id !== config.agentId
         || actualSession?.runtime_adapter_id !== config.runtimeId) reject('CURRENT_AUTHORITY_UNAVAILABLE');
-    let claimed = false, receivedAt = null;
+    let claimed = false, requestStartedAt = null;
     const claim = () => {
       if (claimed) reject('OUTCOME_UNKNOWN');
       if (aborted()) reject('ABORTED');
@@ -80,10 +82,10 @@ export function createStudioAuthority(config, journalPath) {
         config: effective,
         api: { async request(method, endpoint, body, options) {
           if (aborted()) reject('ABORTED');
-          if (method === 'POST' && endpoint === '/api/actions') claim();
-          const response = await api.request(method, endpoint, body, options);
-          if (method === 'POST' && endpoint === '/api/actions') {
-            receivedAt = performance.now();
+          const registering = method === 'POST' && endpoint === '/api/actions';
+          if (registering) { claim(); requestStartedAt = performance.now(); }
+          const response = await api.request(method, endpoint, body, registering ? receiptWindow : options);
+          if (registering) {
             if (!response.ok || !matchesStoredAction(response.body, record, config)
                 || !cavaFingerprint(response.body)) {
               settle(phase === 'redeeming' ? 'uncertain_redemption' : 'uncertain_request');
@@ -100,7 +102,7 @@ export function createStudioAuthority(config, journalPath) {
             { actionId: record.actionId, fingerprint: record.fingerprint }).authorized);
         },
       });
-      if (result.authorized) return { phase, receivedAt, response: result.response,
+      if (result.authorized) return { phase, dispatchDeadline: requestStartedAt + receiptWindow.timeoutMs, response: result.response,
         ruleExpiresAt: result.ruleRolloutBinding?.expires_at ?? null };
       if (result.reason === 'policy_block') {
         if (!claimed) claim();
@@ -128,7 +130,7 @@ export function createStudioAuthority(config, journalPath) {
         result_digest: resultDigest, result_retained: false, independent_resource_verification: false,
         ...(record.recovery ? { recovery: record.recovery, recovery_evidence_digest: record.errorCode?.slice('recovery_'.length) ?? null } : {}) }),
       ...(state === 'uncertain' ? { error_message: 'Native call outcome is uncertain; no automatic resend.' } : {}),
-    });
+    }, receiptWindow);
     return response.ok && matchesStoredAction(response.body, record, config)
       && response.body.action?.status === (state === 'completed' ? 'completed' : 'failed')
       && typeof response.body.action?.timestamp_end === 'string';

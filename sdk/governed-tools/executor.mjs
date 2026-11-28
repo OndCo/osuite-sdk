@@ -153,14 +153,18 @@ export function createGovernedTools({ config: rawConfig, namespace, journalPath,
       }
       // No await or user observer between this last check, the durable fence,
       // and invoking the original tool. This is not resource-side atomicity.
-      if (aborted() || closed || performance.now() - admitted.receivedAt > 5000 || (recovery && !recovery.fresh())) {
+      const grantExpiry = admitted.phase === 'redeeming' ? Date.parse(admitted.response.action.approval_expires_at) : Infinity;
+      const ruleExpiry = admitted.ruleExpiresAt == null ? Infinity : Date.parse(admitted.ruleExpiresAt);
+      const current = () => performance.now() < admitted.dispatchDeadline && Date.now() < Math.min(grantExpiry, ruleExpiry)
+        && (!recovery || recovery.fresh());
+      if (aborted() || closed || !current()) {
         journal.settle(scope, operationId, owner, admitted.phase,
           admitted.phase === 'redeeming' ? 'uncertain_redemption' : 'uncertain_request');
         reject(aborted() ? 'ABORTED' : 'OUTCOME_UNKNOWN', status(local(operationId)));
       }
       if (!journal.settle(scope, operationId, owner, admitted.phase, 'dispatching', dispatchPatch)) reject('OPERATION_BUSY', status(local(operationId)));
       // Durable local I/O can outlive the admission, even without an await.
-      if (aborted() || closed || performance.now() - admitted.receivedAt > 5000 || (recovery && !recovery.fresh())) {
+      if (aborted() || closed || !current()) {
         try { journal.settle(scope, operationId, owner, 'dispatching', 'uncertain'); }
         catch { /* The committed dispatch fence still forbids replay if cleanup cannot write. */ }
         reject(aborted() ? 'ABORTED' : 'OUTCOME_UNKNOWN', status(local(operationId)));
